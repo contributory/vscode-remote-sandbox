@@ -12,6 +12,13 @@ const DEFAULT_SSH_EXPIRES_MINUTES = 60;
 const START_POLL_ATTEMPTS = 30;
 const START_POLL_INTERVAL_MS = 2000;
 
+// Create-sandbox defaults (mirror the reference daytona/sandbox.py).
+const DEFAULT_IMAGE = "ubuntu:26.04";
+const DEFAULT_CPU = 4;
+const DEFAULT_MEMORY_GB = 8;
+const DEFAULT_DISK_GB = 10;
+const DEFAULT_AUTO_STOP_MIN = 5;
+
 export interface DaytonaSandbox {
   id: string;
   name?: string;
@@ -106,6 +113,30 @@ function getSshExpiresInMinutes(): number {
   return minutes;
 }
 
+/** Default create-sandbox settings, mirroring the reference daytona/sandbox.py. */
+function getDaytonaCreateDefaults(): {
+  image: string;
+  cpu: number;
+  memory: number;
+  disk: number;
+  autoStopInterval: number;
+} {
+  const config = vscode.workspace.getConfiguration("remoteSandbox");
+  const image = config.get<string>("daytonaImage");
+  const cpu = config.get<number>("daytonaCpu");
+  const memory = config.get<number>("daytonaMemory");
+  const disk = config.get<number>("daytonaDisk");
+  const autoStop = config.get<number>("daytonaAutoStopInterval");
+  return {
+    image: image && image.trim() ? image.trim() : DEFAULT_IMAGE,
+    cpu: cpu && cpu > 0 ? cpu : DEFAULT_CPU,
+    memory: memory && memory > 0 ? memory : DEFAULT_MEMORY_GB,
+    disk: disk && disk > 0 ? disk : DEFAULT_DISK_GB,
+    autoStopInterval:
+      autoStop !== undefined && autoStop >= 0 ? autoStop : DEFAULT_AUTO_STOP_MIN,
+  };
+}
+
 export function registerDaytonaCommands(
   context: vscode.ExtensionContext,
   outputChannel: vscode.OutputChannel,
@@ -137,6 +168,144 @@ export async function listDaytonaSandboxes(): Promise<DaytonaSandbox[]> {
     return response.items ?? [];
   } catch {
     return [];
+  }
+}
+
+/** Creates a new Daytona sandbox from the configured base image. Mirrors the
+ * reference daytona/sandbox.py (image + resources + idle auto-stop). */
+export async function createDaytonaSandbox(
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getDaytonaApiKey();
+  if (!apiKey) {
+    promptDaytonaApiKey();
+    return;
+  }
+
+  const apiUrl = getDaytonaApiUrl();
+  const defaults = getDaytonaCreateDefaults();
+  outputChannel.show(true);
+
+  try {
+    const sandbox = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Creating Daytona sandbox (image: ${defaults.image})...`,
+        cancellable: false,
+      },
+      () =>
+        daytonaRequest<DaytonaSandbox>("/sandbox", apiKey, apiUrl, "POST", {
+          cpu: defaults.cpu,
+          memory: defaults.memory,
+          disk: defaults.disk,
+          autoStopInterval: defaults.autoStopInterval,
+          autoArchiveInterval: 0,
+          // Daytona's REST API builds from a Dockerfile rather than a bare
+          // image reference, so wrap the image in a minimal FROM directive.
+          buildInfo: { dockerfileContent: `FROM ${defaults.image}` },
+        }),
+    );
+
+    outputChannel.appendLine(`[Daytona] Created sandbox: ${sandbox.id}`);
+    vscode.window.showInformationMessage(
+      `Daytona sandbox created: ${sandbox.name || sandbox.id}`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[Daytona] Error: ${message}`);
+    vscode.window.showErrorMessage(
+      `Failed to create Daytona sandbox: ${message}`,
+    );
+  }
+}
+
+/** Stops a running Daytona sandbox. State is preserved; it can be started
+ * again by reconnecting. */
+export async function stopDaytonaSandbox(
+  sandboxId: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getDaytonaApiKey();
+  if (!apiKey) {
+    promptDaytonaApiKey();
+    return;
+  }
+
+  const apiUrl = getDaytonaApiUrl();
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Stopping Daytona sandbox ${sandboxId}...`,
+        cancellable: false,
+      },
+      () =>
+        daytonaRequest(
+          `/sandbox/${encodeURIComponent(sandboxId)}/stop`,
+          apiKey,
+          apiUrl,
+          "POST",
+        ),
+    );
+    outputChannel.appendLine(`[Daytona] Stopped sandbox: ${sandboxId}`);
+    vscode.window.showInformationMessage(
+      `Daytona sandbox stopped: ${sandboxId}. Reconnect to start it again.`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[Daytona] Error: ${message}`);
+    vscode.window.showErrorMessage(
+      `Failed to stop Daytona sandbox: ${message}`,
+    );
+  }
+}
+
+/** Deletes a Daytona sandbox after confirmation. This is irreversible. */
+export async function deleteDaytonaSandbox(
+  sandboxId: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getDaytonaApiKey();
+  if (!apiKey) {
+    promptDaytonaApiKey();
+    return;
+  }
+
+  const confirm = await vscode.window.showWarningMessage(
+    `Delete Daytona sandbox ${sandboxId}? This cannot be undone.`,
+    { modal: true },
+    "Delete",
+  );
+  if (confirm !== "Delete") {
+    return;
+  }
+
+  const apiUrl = getDaytonaApiUrl();
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Deleting Daytona sandbox ${sandboxId}...`,
+        cancellable: false,
+      },
+      () =>
+        daytonaRequest(
+          `/sandbox/${encodeURIComponent(sandboxId)}`,
+          apiKey,
+          apiUrl,
+          "DELETE",
+        ),
+    );
+    outputChannel.appendLine(`[Daytona] Deleted sandbox: ${sandboxId}`);
+    vscode.window.showInformationMessage(
+      `Daytona sandbox deleted: ${sandboxId}`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[Daytona] Error: ${message}`);
+    vscode.window.showErrorMessage(
+      `Failed to delete Daytona sandbox: ${message}`,
+    );
   }
 }
 

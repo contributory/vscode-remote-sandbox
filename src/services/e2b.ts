@@ -29,6 +29,16 @@ export function hasE2bApiKey(): boolean {
   return getE2bApiKey() !== undefined;
 }
 
+/** Template ID used when creating a new E2B sandbox (defaults to "ssh-ready"). */
+function getE2bTemplateId(): string {
+  const config = vscode.workspace.getConfiguration("remoteSandbox");
+  const templateId = config.get<string>("e2bTemplateId");
+  if (templateId && templateId.trim().length > 0) {
+    return templateId.trim();
+  }
+  return "ssh-ready";
+}
+
 /** Prompts for and saves the E2B API key to settings (Runloop-style). */
 export async function setE2bApiKey(
   context: vscode.ExtensionContext,
@@ -94,6 +104,128 @@ export async function listE2bSandboxes(): Promise<E2BSandbox[]> {
     return Array.isArray(sandboxes) ? sandboxes : [];
   } catch {
     return [];
+  }
+}
+
+/** Creates a new E2B sandbox from the configured template. Mirrors the
+ * reference e2b/sandbox.js: TTL with auto-pause + auto-resume so the sandbox
+ * pauses when idle and comes back on reconnect. */
+export async function createE2bSandbox(
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getE2bApiKey();
+  if (!apiKey) {
+    promptE2bApiKey();
+    return;
+  }
+
+  const templateId = getE2bTemplateId();
+  outputChannel.show(true);
+
+  try {
+    const sandbox = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Creating E2B sandbox (template: ${templateId})...`,
+        cancellable: false,
+      },
+      () =>
+        e2bRequest<{ sandboxID: string }>("/sandboxes", apiKey, "POST", {
+          templateID: templateId,
+          timeout: SANDBOX_TIMEOUT_SECONDS,
+          autoPause: true,
+          autoResume: { enabled: true },
+        }),
+    );
+
+    outputChannel.appendLine(`[E2B] Created sandbox: ${sandbox.sandboxID}`);
+    vscode.window.showInformationMessage(
+      `E2B sandbox created: ${sandbox.sandboxID}`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[E2B] Error: ${message}`);
+    vscode.window.showErrorMessage(`Failed to create E2B sandbox: ${message}`);
+  }
+}
+
+/** Pauses a running E2B sandbox. State is preserved and it can be resumed by
+ * reconnecting. */
+export async function pauseE2bSandbox(
+  sandboxID: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getE2bApiKey();
+  if (!apiKey) {
+    promptE2bApiKey();
+    return;
+  }
+
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Pausing E2B sandbox ${sandboxID}...`,
+        cancellable: false,
+      },
+      () =>
+        e2bRequest(
+          `/sandboxes/${encodeURIComponent(sandboxID)}/pause`,
+          apiKey,
+          "POST",
+        ),
+    );
+    outputChannel.appendLine(`[E2B] Paused sandbox: ${sandboxID}`);
+    vscode.window.showInformationMessage(
+      `E2B sandbox paused: ${sandboxID}. Reconnect to resume it.`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[E2B] Error: ${message}`);
+    vscode.window.showErrorMessage(`Failed to pause E2B sandbox: ${message}`);
+  }
+}
+
+/** Kills (deletes) an E2B sandbox after confirmation. This is irreversible. */
+export async function deleteE2bSandbox(
+  sandboxID: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getE2bApiKey();
+  if (!apiKey) {
+    promptE2bApiKey();
+    return;
+  }
+
+  const confirm = await vscode.window.showWarningMessage(
+    `Kill E2B sandbox ${sandboxID}? This cannot be undone.`,
+    { modal: true },
+    "Kill",
+  );
+  if (confirm !== "Kill") {
+    return;
+  }
+
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Killing E2B sandbox ${sandboxID}...`,
+        cancellable: false,
+      },
+      () =>
+        e2bRequest(
+          `/sandboxes/${encodeURIComponent(sandboxID)}`,
+          apiKey,
+          "DELETE",
+        ),
+    );
+    outputChannel.appendLine(`[E2B] Killed sandbox: ${sandboxID}`);
+    vscode.window.showInformationMessage(`E2B sandbox killed: ${sandboxID}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[E2B] Error: ${message}`);
+    vscode.window.showErrorMessage(`Failed to kill E2B sandbox: ${message}`);
   }
 }
 
@@ -215,6 +347,11 @@ function e2bRequest<T>(
             response.statusCode >= 200 &&
             response.statusCode < 300
           ) {
+            // Some endpoints (pause, kill) return 204 with no body.
+            if (!data.trim()) {
+              resolve(undefined as T);
+              return;
+            }
             try {
               resolve(JSON.parse(data) as T);
             } catch {

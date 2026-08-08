@@ -3,11 +3,17 @@ import {
   registerE2bCommands,
   connectE2bSandbox,
   setE2bApiKey,
+  createE2bSandbox,
+  pauseE2bSandbox,
+  deleteE2bSandbox,
 } from "./services/e2b";
 import {
   registerDaytonaCommands,
   connectDaytonaSandbox,
   setDaytonaApiKey,
+  createDaytonaSandbox,
+  stopDaytonaSandbox,
+  deleteDaytonaSandbox,
 } from "./services/daytona";
 import {
   createDevbox,
@@ -57,11 +63,76 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
+  // E2B sandbox lifecycle (create / pause / delete)
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "remote-sandbox.e2bCreateSandbox",
+      async () => {
+        await createE2bSandbox(outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.e2bPauseSandbox",
+      async (item: E2BSandboxItem) => {
+        if (!(item instanceof E2BSandboxItem)) {
+          return;
+        }
+        await pauseE2bSandbox(item.sandboxID, outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.e2bDeleteSandbox",
+      async (item: E2BSandboxItem) => {
+        if (!(item instanceof E2BSandboxItem)) {
+          return;
+        }
+        await deleteE2bSandbox(item.sandboxID, outputChannel);
+        provider.refresh();
+      },
+    ),
+  );
+
+  // Daytona sandbox lifecycle (create / stop / delete)
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "remote-sandbox.daytonaCreateSandbox",
+      async () => {
+        await createDaytonaSandbox(outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.daytonaStopSandbox",
+      async (item: DaytonaSandboxItem) => {
+        if (!(item instanceof DaytonaSandboxItem)) {
+          return;
+        }
+        await stopDaytonaSandbox(item.sandboxId, outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.daytonaDeleteSandbox",
+      async (item: DaytonaSandboxItem) => {
+        if (!(item instanceof DaytonaSandboxItem)) {
+          return;
+        }
+        await deleteDaytonaSandbox(item.sandboxId, outputChannel);
+        provider.refresh();
+      },
+    ),
+  );
+
   // Runloop service
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "remote-sandbox.runloopCreateDevbox",
-      () => createDevbox(context),
+      async () => {
+        await createDevbox(context);
+        provider.refresh();
+      },
     ),
     vscode.commands.registerCommand(
       "remote-sandbox.runloopSelectDevboxAndSaveSSH",
@@ -69,13 +140,23 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand(
       "remote-sandbox.runloopSuspendDevbox",
-      (item: RunloopDevboxItem) =>
-        suspendDevbox(context, item instanceof RunloopDevboxItem ? item.devbox : undefined),
+      async (item: RunloopDevboxItem) => {
+        await suspendDevbox(
+          context,
+          item instanceof RunloopDevboxItem ? item.devbox : undefined,
+        );
+        provider.refresh();
+      },
     ),
     vscode.commands.registerCommand(
       "remote-sandbox.runloopResumeDevbox",
-      (item: RunloopDevboxItem) =>
-        resumeDevbox(context, item instanceof RunloopDevboxItem ? item.devbox : undefined),
+      async (item: RunloopDevboxItem) => {
+        await resumeDevbox(
+          context,
+          item instanceof RunloopDevboxItem ? item.devbox : undefined,
+        );
+        provider.refresh();
+      },
     ),
     vscode.commands.registerCommand(
       "remote-sandbox.runloopSnapshotDevbox",
