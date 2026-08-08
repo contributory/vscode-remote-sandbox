@@ -5,6 +5,7 @@ import {
   setE2bApiKey,
   createE2bSandbox,
   pauseE2bSandbox,
+  resumeE2bSandbox,
   deleteE2bSandbox,
 } from "./services/e2b";
 import {
@@ -13,6 +14,7 @@ import {
   setDaytonaApiKey,
   createDaytonaSandbox,
   stopDaytonaSandbox,
+  startDaytonaSandbox,
   deleteDaytonaSandbox,
 } from "./services/daytona";
 import {
@@ -20,6 +22,7 @@ import {
   selectDevboxAndSaveSSH,
   suspendDevbox,
   resumeDevbox,
+  shutdownDevbox,
   snapshotDevbox,
   listSnapshots,
   setApiKey,
@@ -83,6 +86,16 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     ),
     vscode.commands.registerCommand(
+      "remote-sandbox.e2bResumeSandbox",
+      async (item: E2BSandboxItem) => {
+        if (!(item instanceof E2BSandboxItem)) {
+          return;
+        }
+        await resumeE2bSandbox(item.sandboxID, outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
       "remote-sandbox.e2bDeleteSandbox",
       async (item: E2BSandboxItem) => {
         if (!(item instanceof E2BSandboxItem)) {
@@ -110,6 +123,16 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await stopDaytonaSandbox(item.sandboxId, outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.daytonaStartSandbox",
+      async (item: DaytonaSandboxItem) => {
+        if (!(item instanceof DaytonaSandboxItem)) {
+          return;
+        }
+        await startDaytonaSandbox(item.sandboxId, outputChannel);
         provider.refresh();
       },
     ),
@@ -152,6 +175,16 @@ export function activate(context: vscode.ExtensionContext): void {
       "remote-sandbox.runloopResumeDevbox",
       async (item: RunloopDevboxItem) => {
         await resumeDevbox(
+          context,
+          item instanceof RunloopDevboxItem ? item.devbox : undefined,
+        );
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.runloopShutdownDevbox",
+      async (item: RunloopDevboxItem) => {
+        await shutdownDevbox(
           context,
           item instanceof RunloopDevboxItem ? item.devbox : undefined,
         );

@@ -186,7 +186,43 @@ export async function pauseE2bSandbox(
   }
 }
 
-/** Kills (deletes) an E2B sandbox after confirmation. This is irreversible. */
+/** Resumes a paused E2B sandbox. State is preserved and can be paused again. */
+export async function resumeE2bSandbox(
+  sandboxID: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getE2bApiKey();
+  if (!apiKey) {
+    promptE2bApiKey();
+    return;
+  }
+
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Resuming E2B sandbox ${sandboxID}...`,
+        cancellable: false,
+      },
+      () =>
+        e2bRequest(
+          `/sandboxes/${encodeURIComponent(sandboxID)}/connect`,
+          apiKey,
+          "POST",
+          { timeout: SANDBOX_TIMEOUT_SECONDS },
+        ),
+    );
+    outputChannel.appendLine(`[E2B] Resumed sandbox: ${sandboxID}`);
+    vscode.window.showInformationMessage(`E2B sandbox resumed: ${sandboxID}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[E2B] Error: ${message}`);
+    vscode.window.showErrorMessage(`Failed to resume E2B sandbox: ${message}`);
+  }
+}
+
+/** Kills (deletes) an E2B sandbox after confirmation. This is irreversible.
+ * Not exposed in the UI; only available via the command palette. */
 export async function deleteE2bSandbox(
   sandboxID: string,
   outputChannel: vscode.OutputChannel,

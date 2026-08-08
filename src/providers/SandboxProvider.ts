@@ -39,7 +39,10 @@ export class E2BSandboxItem extends vscode.TreeItem {
     super(sandboxID, vscode.TreeItemCollapsibleState.None);
     this.description = state ?? "";
     this.iconPath = new vscode.ThemeIcon("server-process");
-    this.contextValue = "e2bSandbox";
+    // State-aware contextValue so the UI can show "Pause" for running
+    // sandboxes and "Resume" for paused ones.
+    this.contextValue =
+      state === "paused" ? "e2bSandboxPaused" : "e2bSandboxRunning";
     this.tooltip = `E2B sandbox: ${sandboxID}`;
   }
 }
@@ -53,7 +56,10 @@ export class DaytonaSandboxItem extends vscode.TreeItem {
     super(name || sandboxId, vscode.TreeItemCollapsibleState.None);
     this.description = state ?? "";
     this.iconPath = new vscode.ThemeIcon("server");
-    this.contextValue = "daytonaSandbox";
+    // State-aware contextValue so the UI can show "Stop" when started and
+    // "Start" when stopped.
+    this.contextValue =
+      state === "started" ? "daytonaSandboxStarted" : "daytonaSandboxStopped";
     this.tooltip = `Daytona sandbox: ${sandboxId}`;
   }
 }
@@ -63,7 +69,12 @@ export class RunloopDevboxItem extends vscode.TreeItem {
     super(devbox.name || devbox.id, vscode.TreeItemCollapsibleState.None);
     this.description = devbox.status;
     this.iconPath = new vscode.ThemeIcon("package");
-    this.contextValue = "runloopDevbox";
+    // State-aware contextValue so the UI can show "Suspend" when running and
+    // "Resume" when suspended.
+    this.contextValue =
+      devbox.status === "suspended"
+        ? "runloopDevboxSuspended"
+        : "runloopDevboxRunning";
     this.tooltip = `Runloop devbox: ${devbox.id}`;
   }
 }

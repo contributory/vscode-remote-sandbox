@@ -39,7 +39,13 @@ Open the **Remote Sandbox** view in the Activity Bar. The tree shows one section
 - **Daytona Sandboxes** — list of your Daytona sandboxes. Connecting starts the sandbox, mints an SSH access token and opens Remote-SSH.
 - **Runloop Devboxes** — list of your devboxes with actions to create, suspend, resume, snapshot, or connect.
 
-Each item has a context menu to **Connect in Current Window** or **Connect in New Window**. The view title bar has shortcuts for:
+Each item has a context menu to **Connect in Current Window** or **Connect in New Window**. Next to the connect buttons, each sandbox/devbox shows a lifecycle toggle:
+
+- **E2B**: **Pause** when running, **Resume** when paused.
+- **Daytona**: **Stop** when started, **Start** when stopped.
+- **Runloop**: **Suspend** when running, **Resume** when suspended.
+
+The view title bar has shortcuts for:
 
 - Refresh
 - Runloop: Create Devbox

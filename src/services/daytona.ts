@@ -260,7 +260,48 @@ export async function stopDaytonaSandbox(
   }
 }
 
-/** Deletes a Daytona sandbox after confirmation. This is irreversible. */
+/** Starts a stopped Daytona sandbox. */
+export async function startDaytonaSandbox(
+  sandboxId: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getDaytonaApiKey();
+  if (!apiKey) {
+    promptDaytonaApiKey();
+    return;
+  }
+
+  const apiUrl = getDaytonaApiUrl();
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Starting Daytona sandbox ${sandboxId}...`,
+        cancellable: false,
+      },
+      () =>
+        daytonaRequest(
+          `/sandbox/${encodeURIComponent(sandboxId)}/start`,
+          apiKey,
+          apiUrl,
+          "POST",
+        ),
+    );
+    outputChannel.appendLine(`[Daytona] Started sandbox: ${sandboxId}`);
+    vscode.window.showInformationMessage(
+      `Daytona sandbox started: ${sandboxId}.`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[Daytona] Error: ${message}`);
+    vscode.window.showErrorMessage(
+      `Failed to start Daytona sandbox: ${message}`,
+    );
+  }
+}
+
+/** Deletes a Daytona sandbox after confirmation. This is irreversible.
+ * Not exposed in the UI; only available via the command palette. */
 export async function deleteDaytonaSandbox(
   sandboxId: string,
   outputChannel: vscode.OutputChannel,

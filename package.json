@@ -2,7 +2,7 @@
   "name": "remote-sandbox",
   "displayName": "Remote Sandbox",
   "description": "Manage E2B, Daytona and Runloop sandboxes and connect to them over SSH from VS Code.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/starfall-org/remote-sandbox-vscode.git"
@@ -63,6 +63,11 @@
         "icon": "$(debug-pause)"
       },
       {
+        "command": "remote-sandbox.e2bResumeSandbox",
+        "title": "E2B: Resume Sandbox",
+        "icon": "$(debug-start)"
+      },
+      {
         "command": "remote-sandbox.e2bDeleteSandbox",
         "title": "E2B: Kill Sandbox",
         "icon": "$(trash)"
@@ -81,6 +86,11 @@
         "command": "remote-sandbox.daytonaStopSandbox",
         "title": "Daytona: Stop Sandbox",
         "icon": "$(debug-stop)"
+      },
+      {
+        "command": "remote-sandbox.daytonaStartSandbox",
+        "title": "Daytona: Start Sandbox",
+        "icon": "$(debug-start)"
       },
       {
         "command": "remote-sandbox.daytonaDeleteSandbox",
@@ -104,6 +114,10 @@
       {
         "command": "remote-sandbox.runloopResumeDevbox",
         "title": "Runloop: Resume Devbox"
+      },
+      {
+        "command": "remote-sandbox.runloopShutdownDevbox",
+        "title": "Runloop: Shut Down Devbox"
       },
       {
         "command": "remote-sandbox.runloopSnapshotDevbox",
@@ -181,68 +195,68 @@
           "group": "1_snapshots@1"
         },
         {
-          "command": "remote-sandbox.connectInCurrentWindow",
-          "when": "viewItem == e2bSandbox && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@1"
-        },
-        {
-          "command": "remote-sandbox.connectInNewWindow",
-          "when": "viewItem == e2bSandbox && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@2"
-        },
-        {
           "command": "remote-sandbox.e2bPauseSandbox",
-          "when": "viewItem == e2bSandbox && view == remote-sandbox-sandboxes-sidebar",
-          "group": "1_modification@1"
+          "when": "viewItem == e2bSandboxRunning && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@0"
         },
         {
-          "command": "remote-sandbox.e2bDeleteSandbox",
-          "when": "viewItem == e2bSandbox && view == remote-sandbox-sandboxes-sidebar",
-          "group": "1_modification@2"
+          "command": "remote-sandbox.e2bResumeSandbox",
+          "when": "viewItem == e2bSandboxPaused && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@0"
         },
         {
           "command": "remote-sandbox.connectInCurrentWindow",
-          "when": "viewItem == daytonaSandbox && view == remote-sandbox-sandboxes-sidebar",
+          "when": "viewItem =~ /e2bSandbox/ && view == remote-sandbox-sandboxes-sidebar",
           "group": "inline@1"
         },
         {
           "command": "remote-sandbox.connectInNewWindow",
-          "when": "viewItem == daytonaSandbox && view == remote-sandbox-sandboxes-sidebar",
+          "when": "viewItem =~ /e2bSandbox/ && view == remote-sandbox-sandboxes-sidebar",
           "group": "inline@2"
         },
         {
           "command": "remote-sandbox.daytonaStopSandbox",
-          "when": "viewItem == daytonaSandbox && view == remote-sandbox-sandboxes-sidebar",
-          "group": "1_modification@1"
+          "when": "viewItem == daytonaSandboxStarted && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@0"
         },
         {
-          "command": "remote-sandbox.daytonaDeleteSandbox",
-          "when": "viewItem == daytonaSandbox && view == remote-sandbox-sandboxes-sidebar",
-          "group": "1_modification@2"
+          "command": "remote-sandbox.daytonaStartSandbox",
+          "when": "viewItem == daytonaSandboxStopped && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@0"
         },
         {
           "command": "remote-sandbox.connectInCurrentWindow",
-          "when": "viewItem == runloopDevbox && view == remote-sandbox-sandboxes-sidebar",
+          "when": "viewItem =~ /daytonaSandbox/ && view == remote-sandbox-sandboxes-sidebar",
           "group": "inline@1"
         },
         {
           "command": "remote-sandbox.connectInNewWindow",
-          "when": "viewItem == runloopDevbox && view == remote-sandbox-sandboxes-sidebar",
+          "when": "viewItem =~ /daytonaSandbox/ && view == remote-sandbox-sandboxes-sidebar",
           "group": "inline@2"
         },
         {
           "command": "remote-sandbox.runloopSuspendDevbox",
-          "when": "viewItem == runloopDevbox && view == remote-sandbox-sandboxes-sidebar",
-          "group": "1_modification@1"
+          "when": "viewItem == runloopDevboxRunning && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@0"
         },
         {
           "command": "remote-sandbox.runloopResumeDevbox",
-          "when": "viewItem == runloopDevbox && view == remote-sandbox-sandboxes-sidebar",
-          "group": "1_modification@2"
+          "when": "viewItem == runloopDevboxSuspended && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@0"
+        },
+        {
+          "command": "remote-sandbox.connectInCurrentWindow",
+          "when": "viewItem =~ /runloopDevbox/ && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@1"
+        },
+        {
+          "command": "remote-sandbox.connectInNewWindow",
+          "when": "viewItem =~ /runloopDevbox/ && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@2"
         },
         {
           "command": "remote-sandbox.runloopSnapshotDevbox",
-          "when": "viewItem == runloopDevbox && view == remote-sandbox-sandboxes-sidebar",
+          "when": "viewItem =~ /runloopDevbox/ && view == remote-sandbox-sandboxes-sidebar",
           "group": "1_modification@3"
         }
       ]
@@ -319,6 +333,7 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.80.0",
+    "@vscode/vsce": "^3.9.2",
     "typescript": "^5.3.3"
   }
 }

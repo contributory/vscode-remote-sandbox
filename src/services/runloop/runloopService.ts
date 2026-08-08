@@ -276,6 +276,55 @@ export async function resumeDevbox(
 }
 
 /* ------------------------------------------------------------------ */
+/* Command: Shut down a devbox (terminal state)                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Shuts down a devbox. This is a terminal state — the devbox can no longer be
+ * resumed or connected to. Not exposed in the UI; only available via the
+ * command palette, and always guarded by a confirmation alert.
+ */
+export async function shutdownDevbox(
+  context: vscode.ExtensionContext,
+  devbox?: Devbox
+): Promise<void> {
+  try {
+    const api = await requireApi(context);
+    const target = devbox ?? (await pickDevbox(
+      api,
+      ['running', 'suspended'],
+      'Select a devbox to shut down'
+    ));
+    if (!target) {
+      return;
+    }
+
+    const confirm = await vscode.window.showWarningMessage(
+      `Shut down devbox ${target.name || target.id}? This cannot be undone.`,
+      { modal: true },
+      'Shut Down'
+    );
+    if (confirm !== 'Shut Down') {
+      return;
+    }
+
+    const updated = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Shutting down ${target.name || target.id}...`,
+        cancellable: false,
+      },
+      () => api.shutdownDevbox(target.id)
+    );
+    vscode.window.showInformationMessage(
+      `Shut down ${target.name || target.id} (status: ${updated.status}).`
+    );
+  } catch (err) {
+    vscode.window.showErrorMessage(`Failed to shut down devbox: ${errMessage(err)}`);
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Snapshots: preserve disk state to reuse on a new devbox             */
 /* ------------------------------------------------------------------ */
 

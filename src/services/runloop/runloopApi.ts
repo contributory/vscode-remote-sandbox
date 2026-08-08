@@ -165,6 +165,16 @@ export class RunloopApi {
     );
   }
 
+  /** POST /v1/devboxes/{id}/shutdown — shut down a devbox (terminal state).
+   * The devbox can no longer be resumed or connected to afterwards. */
+  async shutdownDevbox(devboxId: string): Promise<Devbox> {
+    return this.request<Devbox>(
+      'POST',
+      `/v1/devboxes/${encodeURIComponent(devboxId)}/shutdown`,
+      {}
+    );
+  }
+
   /** POST /v1/devboxes/{id}/snapshot_disk — synchronously snapshot a running devbox's disk. */
   async snapshotDisk(devboxId: string, name?: string, commitMessage?: string): Promise<DiskSnapshot> {
     const body: Record<string, unknown> = {};
