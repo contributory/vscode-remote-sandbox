@@ -213,7 +213,7 @@
         {
           "command": "remote-sandbox.runloopSnapshotDevbox",
           "when": "viewItem =~ /runloopDevbox/ && view == remote-sandbox-sandboxes-sidebar",
-          "group": "1_modification@3"
+          "group": "inline@3"
         }
       ]
     },
