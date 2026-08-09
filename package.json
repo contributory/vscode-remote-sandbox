@@ -82,19 +82,23 @@
       },
       {
         "command": "remote-sandbox.runloopSuspendDevbox",
-        "title": "Runloop: Suspend Devbox"
+        "title": "Runloop: Suspend Devbox",
+        "icon": "$(debug-pause)"
       },
       {
         "command": "remote-sandbox.runloopResumeDevbox",
-        "title": "Runloop: Resume Devbox"
+        "title": "Runloop: Resume Devbox",
+        "icon": "$(debug-start)"
       },
       {
         "command": "remote-sandbox.runloopShutdownDevbox",
-        "title": "Runloop: Shut Down Devbox"
+        "title": "Runloop: Shut Down Devbox",
+        "icon": "$(debug-stop)"
       },
       {
         "command": "remote-sandbox.runloopSnapshotDevbox",
-        "title": "Runloop: Snapshot Devbox Disk"
+        "title": "Runloop: Snapshot Devbox Disk",
+        "icon": "$(camera)"
       },
       {
         "command": "remote-sandbox.runloopListDevboxes",
