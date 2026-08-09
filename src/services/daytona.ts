@@ -118,16 +118,18 @@ export async function listDaytonaSandboxes(
   }
   const apiUrl = getDaytonaApiUrl();
   try {
-    // GET /sandbox returns the full list as a plain JSON array. (The paginated
-    // wrapper { items: [...] } belongs to the DEPRECATED /sandbox/paginated
-    // endpoint.) Handle both shapes so the list never comes back empty.
+    // Official spec: GET /sandbox (listSandboxes) returns ListSandboxesResponse
+    // = { items: SandboxListItem[], nextCursor }. The separate, deprecated
+    // /sandbox/paginated endpoint also wraps results in { items, ... }. Prefer
+    // the { items } wrapper and keep a defensive plain-array fallback in case
+    // an older server still returns a bare array.
     const response = await daytonaRequest<unknown>("/sandbox", apiKey, apiUrl);
-    if (Array.isArray(response)) {
-      return response as DaytonaSandbox[];
-    }
     const list = response as Partial<ListSandboxesResponse>;
     if (Array.isArray(list.items)) {
       return list.items;
+    }
+    if (Array.isArray(response)) {
+      return response as DaytonaSandbox[];
     }
     outputChannel?.appendLine(
       "[Daytona] Unexpected response shape from GET /sandbox; no sandboxes found.",
