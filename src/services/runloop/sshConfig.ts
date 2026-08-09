@@ -126,3 +126,22 @@ export async function ensureIncludeLine(): Promise<boolean> {
     return false;
   }
 }
+
+/** Reads the runloop SSH config file (returns "" when it does not exist). */
+export async function readSshConfig(): Promise<string> {
+  try {
+    return await fs.readFile(getSshConfigPath(), 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+/** True when the shared private key file exists on disk. */
+export async function privateKeyFileExists(): Promise<boolean> {
+  try {
+    await fs.access(getPrivateKeyPath());
+    return true;
+  } catch {
+    return false;
+  }
+}

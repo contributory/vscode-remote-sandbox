@@ -2,7 +2,7 @@
   "name": "remote-sandbox",
   "displayName": "Remote Sandbox",
   "description": "Manage E2B, Daytona and Runloop sandboxes and connect to them over SSH from VS Code.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/starfall-org/remote-sandbox-vscode.git"
@@ -15,9 +15,8 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
   "extensionKind": [
-    "ui"
+    "workspace"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -48,16 +47,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "remote-sandbox.e2bGetSandboxSshInfo",
-        "title": "E2B: Get Sandbox SSH Info",
-        "icon": "$(server-process)"
-      },
-      {
-        "command": "remote-sandbox.e2bCreateSandbox",
-        "title": "E2B: Create Sandbox",
-        "icon": "$(add)"
-      },
-      {
         "command": "remote-sandbox.e2bPauseSandbox",
         "title": "E2B: Pause Sandbox",
         "icon": "$(debug-pause)"
@@ -68,19 +57,8 @@
         "icon": "$(debug-start)"
       },
       {
-        "command": "remote-sandbox.e2bDeleteSandbox",
-        "title": "E2B: Kill Sandbox",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "remote-sandbox.daytonaGetSandboxSshInfo",
-        "title": "Daytona: Get Sandbox SSH Info",
-        "icon": "$(server)"
-      },
-      {
-        "command": "remote-sandbox.daytonaCreateSandbox",
-        "title": "Daytona: Create Sandbox",
-        "icon": "$(add)"
+        "command": "remote-sandbox.e2bListSandboxes",
+        "title": "E2B: List Sandboxes"
       },
       {
         "command": "remote-sandbox.daytonaStopSandbox",
@@ -93,19 +71,13 @@
         "icon": "$(debug-start)"
       },
       {
-        "command": "remote-sandbox.daytonaDeleteSandbox",
-        "title": "Daytona: Delete Sandbox",
-        "icon": "$(trash)"
+        "command": "remote-sandbox.daytonaListSandboxes",
+        "title": "Daytona: List Sandboxes"
       },
       {
         "command": "remote-sandbox.runloopCreateDevbox",
         "title": "Runloop: Create Devbox",
         "icon": "$(add)"
-      },
-      {
-        "command": "remote-sandbox.runloopSelectDevboxAndSaveSSH",
-        "title": "Runloop: Select Devbox & Save SSH Config",
-        "icon": "$(save)"
       },
       {
         "command": "remote-sandbox.runloopSuspendDevbox",
@@ -122,6 +94,10 @@
       {
         "command": "remote-sandbox.runloopSnapshotDevbox",
         "title": "Runloop: Snapshot Devbox Disk"
+      },
+      {
+        "command": "remote-sandbox.runloopListDevboxes",
+        "title": "Runloop: List Devboxes"
       },
       {
         "command": "remote-sandbox.runloopListSnapshots",
@@ -160,34 +136,9 @@
       ],
       "view/item/context": [
         {
-          "command": "remote-sandbox.e2bCreateSandbox",
-          "when": "viewItem == e2bSection && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@1"
-        },
-        {
-          "command": "remote-sandbox.e2bGetSandboxSshInfo",
-          "when": "viewItem == e2bSection && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@2"
-        },
-        {
-          "command": "remote-sandbox.daytonaCreateSandbox",
-          "when": "viewItem == daytonaSection && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@1"
-        },
-        {
-          "command": "remote-sandbox.daytonaGetSandboxSshInfo",
-          "when": "viewItem == daytonaSection && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@2"
-        },
-        {
           "command": "remote-sandbox.runloopCreateDevbox",
           "when": "viewItem == runloopSection && view == remote-sandbox-sandboxes-sidebar",
           "group": "inline@1"
-        },
-        {
-          "command": "remote-sandbox.runloopSelectDevboxAndSaveSSH",
-          "when": "viewItem == runloopSection && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@2"
         },
         {
           "command": "remote-sandbox.runloopListSnapshots",
@@ -270,11 +221,6 @@
           "editPresentation": "password",
           "markdownDescription": "Your [E2B](https://e2b.dev) API key. The extension uses this to authenticate with the E2B API. Set it here, run the **E2B: Set API Key** command, or use the `E2B_API_KEY` environment variable."
         },
-        "remoteSandbox.e2bTemplateId": {
-          "type": "string",
-          "default": "ssh-ready",
-          "description": "E2B template ID used when creating a new sandbox."
-        },
         "remoteSandbox.daytonaApiKey": {
           "type": "string",
           "default": "",
@@ -291,31 +237,6 @@
           "default": 60,
           "description": "Expiration time (in minutes) for the generated Daytona SSH access token."
         },
-        "remoteSandbox.daytonaImage": {
-          "type": "string",
-          "default": "ubuntu:26.04",
-          "description": "Base image used when creating a new Daytona sandbox."
-        },
-        "remoteSandbox.daytonaCpu": {
-          "type": "number",
-          "default": 4,
-          "description": "CPU cores allocated to a new Daytona sandbox."
-        },
-        "remoteSandbox.daytonaMemory": {
-          "type": "number",
-          "default": 8,
-          "description": "Memory (in GB) allocated to a new Daytona sandbox."
-        },
-        "remoteSandbox.daytonaDisk": {
-          "type": "number",
-          "default": 10,
-          "description": "Disk space (in GB) allocated to a new Daytona sandbox."
-        },
-        "remoteSandbox.daytonaAutoStopInterval": {
-          "type": "number",
-          "default": 5,
-          "description": "Idle minutes before a new Daytona sandbox auto-stops (0 disables auto-stop). The keepalive daemon extends this while the sandbox is in use."
-        },
         "remoteSandbox.runloopApiKey": {
           "type": "string",
           "default": "",
@@ -331,7 +252,7 @@
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^20.19.43",
     "@types/vscode": "^1.80.0",
     "@vscode/vsce": "^3.9.2",
     "typescript": "^5.3.3"

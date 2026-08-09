@@ -29,16 +29,6 @@ export function hasE2bApiKey(): boolean {
   return getE2bApiKey() !== undefined;
 }
 
-/** Template ID used when creating a new E2B sandbox (defaults to "ssh-ready"). */
-function getE2bTemplateId(): string {
-  const config = vscode.workspace.getConfiguration("remoteSandbox");
-  const templateId = config.get<string>("e2bTemplateId");
-  if (templateId && templateId.trim().length > 0) {
-    return templateId.trim();
-  }
-  return "ssh-ready";
-}
-
 /** Prompts for and saves the E2B API key to settings (Runloop-style). */
 export async function setE2bApiKey(
   context: vscode.ExtensionContext,
@@ -75,77 +65,44 @@ function promptE2bApiKey(): void {
     });
 }
 
-export function registerE2bCommands(
-  context: vscode.ExtensionContext,
-  outputChannel: vscode.OutputChannel,
-): void {
-  const disposable = vscode.commands.registerCommand(
-    "remote-sandbox.e2bGetSandboxSshInfo",
-    async () => {
-      await fetchE2bSshConfig(outputChannel);
-    },
-  );
-
-  context.subscriptions.push(disposable);
-}
-
 /** Lists the E2B sandboxes visible to the configured API key. Returns [] when
- * the API key is missing or the request fails. */
-export async function listE2bSandboxes(): Promise<E2BSandbox[]> {
+ * the API key is missing or the request fails. When `outputChannel` is
+ * provided, the listed count and any errors are logged there. */
+export async function listE2bSandboxes(
+  outputChannel?: vscode.OutputChannel,
+): Promise<E2BSandbox[]> {
   const apiKey = getE2bApiKey();
   if (!apiKey) {
     return [];
   }
   try {
-    const sandboxes = await e2bRequest<E2BSandbox[]>(
-      "/v2/sandboxes?limit=100",
-      apiKey,
+    // GET /v2/sandboxes returns the full list as a plain JSON array of
+    // { sandboxID, state, ... } objects (pagination is via headers, not a
+    // { items } wrapper). Handle the array plus any future wrapper shapes so
+    // a shape mismatch never silently yields an empty list.
+    const response = await e2bRequest<unknown>("/v2/sandboxes?limit=100", apiKey);
+    if (Array.isArray(response)) {
+      outputChannel?.appendLine(`[E2B] Listed ${response.length} sandbox(es).`);
+      return response as E2BSandbox[];
+    }
+    const wrapped = response as { sandboxes?: unknown; data?: unknown };
+    const items = wrapped.sandboxes ?? wrapped.data;
+    if (Array.isArray(items)) {
+      outputChannel?.appendLine(
+        `[E2B] Listed ${items.length} sandbox(es) (wrapped response).`,
+      );
+      return items as E2BSandbox[];
+    }
+    outputChannel?.appendLine(
+      "[E2B] Unexpected response shape from GET /v2/sandboxes; no sandboxes found.",
     );
-    return Array.isArray(sandboxes) ? sandboxes : [];
-  } catch {
     return [];
-  }
-}
-
-/** Creates a new E2B sandbox from the configured template. Mirrors the
- * reference e2b/sandbox.js: TTL with auto-pause + auto-resume so the sandbox
- * pauses when idle and comes back on reconnect. */
-export async function createE2bSandbox(
-  outputChannel: vscode.OutputChannel,
-): Promise<void> {
-  const apiKey = getE2bApiKey();
-  if (!apiKey) {
-    promptE2bApiKey();
-    return;
-  }
-
-  const templateId = getE2bTemplateId();
-  outputChannel.show(true);
-
-  try {
-    const sandbox = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Creating E2B sandbox (template: ${templateId})...`,
-        cancellable: false,
-      },
-      () =>
-        e2bRequest<{ sandboxID: string }>("/sandboxes", apiKey, "POST", {
-          templateID: templateId,
-          timeout: SANDBOX_TIMEOUT_SECONDS,
-          autoPause: true,
-          autoResume: { enabled: true },
-        }),
-    );
-
-    outputChannel.appendLine(`[E2B] Created sandbox: ${sandbox.sandboxID}`);
-    vscode.window.showInformationMessage(
-      `E2B sandbox created: ${sandbox.sandboxID}`,
-    );
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    outputChannel.appendLine(`[E2B] Error: ${message}`);
-    vscode.window.showErrorMessage(`Failed to create E2B sandbox: ${message}`);
+    if (outputChannel) {
+      const message = error instanceof Error ? error.message : String(error);
+      outputChannel.appendLine(`[E2B] Error listing sandboxes: ${message}`);
+    }
+    return [];
   }
 }
 
@@ -214,54 +171,22 @@ export async function resumeE2bSandbox(
     );
     outputChannel.appendLine(`[E2B] Resumed sandbox: ${sandboxID}`);
     vscode.window.showInformationMessage(`E2B sandbox resumed: ${sandboxID}`);
+
+    // Make sure the SSH config for this sandbox is up to date so "Connect
+    // in..." works right away (best-effort — never fail the resume on errors).
+    try {
+      ensureE2bSshConfig(sandboxID, outputChannel);
+    } catch (ensureErr) {
+      const ensureMessage =
+        ensureErr instanceof Error ? ensureErr.message : String(ensureErr);
+      outputChannel.appendLine(
+        `[E2B] Warning: could not refresh SSH config: ${ensureMessage}`,
+      );
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     outputChannel.appendLine(`[E2B] Error: ${message}`);
     vscode.window.showErrorMessage(`Failed to resume E2B sandbox: ${message}`);
-  }
-}
-
-/** Kills (deletes) an E2B sandbox after confirmation. This is irreversible.
- * Not exposed in the UI; only available via the command palette. */
-export async function deleteE2bSandbox(
-  sandboxID: string,
-  outputChannel: vscode.OutputChannel,
-): Promise<void> {
-  const apiKey = getE2bApiKey();
-  if (!apiKey) {
-    promptE2bApiKey();
-    return;
-  }
-
-  const confirm = await vscode.window.showWarningMessage(
-    `Kill E2B sandbox ${sandboxID}? This cannot be undone.`,
-    { modal: true },
-    "Kill",
-  );
-  if (confirm !== "Kill") {
-    return;
-  }
-
-  try {
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Killing E2B sandbox ${sandboxID}...`,
-        cancellable: false,
-      },
-      () =>
-        e2bRequest(
-          `/sandboxes/${encodeURIComponent(sandboxID)}`,
-          apiKey,
-          "DELETE",
-        ),
-    );
-    outputChannel.appendLine(`[E2B] Killed sandbox: ${sandboxID}`);
-    vscode.window.showInformationMessage(`E2B sandbox killed: ${sandboxID}`);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    outputChannel.appendLine(`[E2B] Error: ${message}`);
-    vscode.window.showErrorMessage(`Failed to kill E2B sandbox: ${message}`);
   }
 }
 
@@ -299,55 +224,13 @@ export async function connectE2bSandbox(
     }
 
     const hostAlias = getE2bHostAlias(sandboxID);
-    const configPath = writeE2bConfig(sandboxID, outputChannel);
-    outputChannel.appendLine(`[E2B] SSH config written to: ${configPath}`);
+    ensureE2bSshConfig(sandboxID, outputChannel);
     return hostAlias;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     outputChannel.appendLine(`[E2B] Error: ${message}`);
     vscode.window.showErrorMessage(`E2B SSH Error: ${message}`);
     return undefined;
-  }
-}
-
-export async function fetchE2bSshConfig(
-  outputChannel: vscode.OutputChannel,
-): Promise<void> {
-  const apiKey = getE2bApiKey();
-  if (!apiKey) {
-    outputChannel.appendLine("[E2B] API key is not configured. Aborting.");
-    promptE2bApiKey();
-    return;
-  }
-
-  outputChannel.show(true);
-
-  try {
-    outputChannel.appendLine("[E2B] Looking for an existing sandbox...");
-    const sandboxes = await e2bRequest<E2BSandbox[]>(
-      "/v2/sandboxes?limit=100",
-      apiKey,
-    );
-    const sandbox = sandboxes[0];
-
-    if (!sandbox) {
-      outputChannel.appendLine("[E2B] No sandbox found.");
-      vscode.window.showWarningMessage(
-        "No E2B sandbox found. Please create a sandbox first.",
-      );
-      return;
-    }
-
-    const hostAlias = await connectE2bSandbox(sandbox.sandboxID, outputChannel);
-    if (hostAlias) {
-      vscode.window.showInformationMessage(
-        `E2B SSH config saved (Host: ${hostAlias})`,
-      );
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    outputChannel.appendLine(`[E2B] Error: ${message}`);
-    vscode.window.showErrorMessage(`E2B SSH Error: ${message}`);
   }
 }
 
@@ -425,6 +308,43 @@ function getE2bHostAlias(sandboxID: string): string {
   return `E2B_${sandboxID}`;
 }
 
+function buildE2bBlock(sandboxID: string): string {
+  return (
+    `Host ${getE2bHostAlias(sandboxID)}\n` +
+    `    ProxyCommand websocat --binary -B 65536 - wss://8081-${sandboxID}.e2b.app\n` +
+    `    HostName ${sandboxID}\n` +
+    "    User user\n"
+  );
+}
+
+/** Ensures ~/.ssh/e2b.conf holds the correct entry for this sandbox. Writes it
+ * only when the file is missing or differs from what we would generate (the
+ * E2B config is fully deterministic, so no API call is needed to check).
+ * Returns the SSH host alias. */
+export function ensureE2bSshConfig(
+  sandboxID: string,
+  outputChannel: vscode.OutputChannel,
+): string {
+  const alias = getE2bHostAlias(sandboxID);
+  const configPath = path.join(os.homedir(), ".ssh", "e2b.conf");
+  const expected = buildE2bBlock(sandboxID);
+  try {
+    const existing = fs.existsSync(configPath)
+      ? fs.readFileSync(configPath, "utf8")
+      : "";
+    if (existing.trim() === expected.trim()) {
+      outputChannel.appendLine(
+        `[E2B] SSH config already up to date (Host: ${alias}).`,
+      );
+      return alias;
+    }
+  } catch {
+    // Fall through and rewrite.
+  }
+  writeE2bConfig(sandboxID, outputChannel);
+  return alias;
+}
+
 function writeE2bConfig(
   sandboxID: string,
   outputChannel: vscode.OutputChannel,
@@ -434,11 +354,7 @@ function writeE2bConfig(
     fs.mkdirSync(sshDir, { recursive: true, mode: 0o700 });
   }
 
-  const configContent =
-    `Host ${getE2bHostAlias(sandboxID)}\n` +
-    `    ProxyCommand websocat --binary -B 65536 - wss://8081-${sandboxID}.e2b.app\n` +
-    `    HostName ${sandboxID}\n` +
-    "    User user\n";
+  const configContent = buildE2bBlock(sandboxID);
   const configPath = path.join(sshDir, "e2b.conf");
 
   fs.writeFileSync(configPath, configContent, { mode: 0o600 });

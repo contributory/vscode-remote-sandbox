@@ -1,29 +1,25 @@
 import * as vscode from "vscode";
 import {
-  registerE2bCommands,
   connectE2bSandbox,
+  listE2bSandboxes,
   setE2bApiKey,
-  createE2bSandbox,
   pauseE2bSandbox,
   resumeE2bSandbox,
-  deleteE2bSandbox,
 } from "./services/e2b";
 import {
-  registerDaytonaCommands,
   connectDaytonaSandbox,
+  listDaytonaSandboxes,
   setDaytonaApiKey,
-  createDaytonaSandbox,
   stopDaytonaSandbox,
   startDaytonaSandbox,
-  deleteDaytonaSandbox,
 } from "./services/daytona";
 import {
   createDevbox,
-  selectDevboxAndSaveSSH,
   suspendDevbox,
   resumeDevbox,
   shutdownDevbox,
   snapshotDevbox,
+  listDevboxes,
   listSnapshots,
   setApiKey,
   connectToDevbox,
@@ -50,10 +46,6 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   outputChannel.appendLine("View registered: remote-sandbox-sandboxes-sidebar");
 
-  // E2B + Daytona services
-  registerE2bCommands(context, outputChannel);
-  registerDaytonaCommands(context, outputChannel);
-
   // E2B + Daytona API key commands (Runloop-style)
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -66,15 +58,8 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
-  // E2B sandbox lifecycle (create / pause / delete)
+  // E2B sandbox lifecycle (pause / resume)
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "remote-sandbox.e2bCreateSandbox",
-      async () => {
-        await createE2bSandbox(outputChannel);
-        provider.refresh();
-      },
-    ),
     vscode.commands.registerCommand(
       "remote-sandbox.e2bPauseSandbox",
       async (item: E2BSandboxItem) => {
@@ -95,27 +80,10 @@ export function activate(context: vscode.ExtensionContext): void {
         provider.refresh();
       },
     ),
-    vscode.commands.registerCommand(
-      "remote-sandbox.e2bDeleteSandbox",
-      async (item: E2BSandboxItem) => {
-        if (!(item instanceof E2BSandboxItem)) {
-          return;
-        }
-        await deleteE2bSandbox(item.sandboxID, outputChannel);
-        provider.refresh();
-      },
-    ),
   );
 
-  // Daytona sandbox lifecycle (create / stop / delete)
+  // Daytona sandbox lifecycle (stop / start)
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "remote-sandbox.daytonaCreateSandbox",
-      async () => {
-        await createDaytonaSandbox(outputChannel);
-        provider.refresh();
-      },
-    ),
     vscode.commands.registerCommand(
       "remote-sandbox.daytonaStopSandbox",
       async (item: DaytonaSandboxItem) => {
@@ -136,16 +104,6 @@ export function activate(context: vscode.ExtensionContext): void {
         provider.refresh();
       },
     ),
-    vscode.commands.registerCommand(
-      "remote-sandbox.daytonaDeleteSandbox",
-      async (item: DaytonaSandboxItem) => {
-        if (!(item instanceof DaytonaSandboxItem)) {
-          return;
-        }
-        await deleteDaytonaSandbox(item.sandboxId, outputChannel);
-        provider.refresh();
-      },
-    ),
   );
 
   // Runloop service
@@ -156,10 +114,6 @@ export function activate(context: vscode.ExtensionContext): void {
         await createDevbox(context);
         provider.refresh();
       },
-    ),
-    vscode.commands.registerCommand(
-      "remote-sandbox.runloopSelectDevboxAndSaveSSH",
-      () => selectDevboxAndSaveSSH(context),
     ),
     vscode.commands.registerCommand(
       "remote-sandbox.runloopSuspendDevbox",
@@ -176,6 +130,7 @@ export function activate(context: vscode.ExtensionContext): void {
       async (item: RunloopDevboxItem) => {
         await resumeDevbox(
           context,
+          outputChannel,
           item instanceof RunloopDevboxItem ? item.devbox : undefined,
         );
         provider.refresh();
@@ -203,6 +158,95 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "remote-sandbox.runloopSetApiKey",
       () => setApiKey(context),
+    ),
+  );
+
+  // List sandboxes / devboxes (command palette, QuickPick → connect)
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "remote-sandbox.e2bListSandboxes",
+      async () => {
+        const sandboxes = await listE2bSandboxes(outputChannel);
+        if (sandboxes.length === 0) {
+          vscode.window.showInformationMessage("No E2B sandboxes found.");
+          return;
+        }
+        const pick = await vscode.window.showQuickPick(
+          sandboxes.map((s) => ({
+            label: s.sandboxID,
+            description: s.state ?? "unknown",
+          })),
+          {
+            placeHolder: "Select an E2B sandbox to connect to",
+            matchOnDescription: true,
+          },
+        );
+        if (!pick) {
+          return;
+        }
+        const hostAlias = await connectE2bSandbox(pick.label, outputChannel);
+        if (hostAlias) {
+          openRemoteWindow(hostAlias, false, outputChannel);
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.daytonaListSandboxes",
+      async () => {
+        const sandboxes = await listDaytonaSandboxes(outputChannel);
+        if (sandboxes.length === 0) {
+          vscode.window.showInformationMessage("No Daytona sandboxes found.");
+          return;
+        }
+        const pick = await vscode.window.showQuickPick(
+          sandboxes.map((s) => ({
+            label: s.name || s.id,
+            description: s.state ?? "unknown",
+            detail: s.id,
+            sandboxId: s.id,
+          })),
+          {
+            placeHolder: "Select a Daytona sandbox to connect to",
+            matchOnDescription: true,
+          },
+        );
+        if (!pick) {
+          return;
+        }
+        const hostAlias = await connectDaytonaSandbox(pick.sandboxId, outputChannel);
+        if (hostAlias) {
+          openRemoteWindow(hostAlias, false, outputChannel);
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.runloopListDevboxes",
+      async () => {
+        const devboxes = await listDevboxes(context);
+        if (devboxes.length === 0) {
+          vscode.window.showInformationMessage("No Runloop devboxes found.");
+          return;
+        }
+        const pick = await vscode.window.showQuickPick(
+          devboxes.map((d) => ({
+            label: d.name || d.id,
+            description: d.status,
+            detail: d.id,
+            devbox: d,
+          })),
+          {
+            placeHolder: "Select a Runloop devbox to connect to",
+            matchOnDescription: true,
+          },
+        );
+        if (!pick) {
+          return;
+        }
+        const hostAlias = await connectToDevbox(pick.devbox, context, outputChannel);
+        if (hostAlias) {
+          openRemoteWindow(hostAlias, false, outputChannel);
+        }
+      },
     ),
   );
 

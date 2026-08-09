@@ -3,8 +3,9 @@ import { RunloopApi, RunloopApiError, type Devbox, type DiskSnapshot } from './r
 import {
   buildSshBlock,
   ensureIncludeLine,
-  getSshConfigPath,
   hostAliasFor,
+  privateKeyFileExists,
+  readSshConfig,
   writePrivateKey,
   writeSshConfig,
 } from './sshConfig';
@@ -189,32 +190,12 @@ export async function createDevbox(
     );
 
     const label = devbox.name || devbox.id;
-    const action = await vscode.window.showInformationMessage(
-      `Devbox created: ${label} (${devbox.id}) — status: ${devbox.status}`,
-      'Save SSH config'
+    vscode.window.showInformationMessage(
+      `Devbox created: ${label} (${devbox.id}) — status: ${devbox.status}. ` +
+        'Connect to it from the Sandboxes view to set up SSH automatically.'
     );
-    if (action === 'Save SSH config') {
-      await saveSshConfigForDevbox(api, devbox);
-    }
   } catch (err) {
     vscode.window.showErrorMessage(`Failed to create devbox: ${errMessage(err)}`);
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/* Command: List devboxes, pick one, save SSH config                   */
-/* ------------------------------------------------------------------ */
-
-export async function selectDevboxAndSaveSSH(context: vscode.ExtensionContext): Promise<void> {
-  try {
-    const api = await requireApi(context);
-    const devbox = await pickDevbox(api, undefined, 'Select a devbox to configure SSH for', ['shutdown']);
-    if (!devbox) {
-      return;
-    }
-    await saveSshConfigForDevbox(api, devbox);
-  } catch (err) {
-    vscode.window.showErrorMessage(`Failed to save SSH config: ${errMessage(err)}`);
   }
 }
 
@@ -251,6 +232,7 @@ export async function suspendDevbox(
 
 export async function resumeDevbox(
   context: vscode.ExtensionContext,
+  outputChannel: vscode.OutputChannel,
   devbox?: Devbox
 ): Promise<void> {
   try {
@@ -270,6 +252,16 @@ export async function resumeDevbox(
     vscode.window.showInformationMessage(
       `Resuming ${target.name || target.id} (status: ${updated.status}).`
     );
+
+    // Make sure the SSH config for this devbox is up to date so "Connect in..."
+    // works right away (best-effort — never fail the resume on config errors).
+    try {
+      await ensureRunloopSshConfig(target, context, outputChannel);
+    } catch (ensureErr) {
+      outputChannel.appendLine(
+        `[Runloop] Warning: could not refresh SSH config: ${errMessage(ensureErr)}`
+      );
+    }
   } catch (err) {
     vscode.window.showErrorMessage(`Failed to resume devbox: ${errMessage(err)}`);
   }
@@ -517,7 +509,7 @@ export async function listDevboxes(context: vscode.ExtensionContext): Promise<De
 }
 
 /* ------------------------------------------------------------------ */
-/* Shared: create SSH key + write ~/.ssh/runloop.conf                   */
+/* Shared: create SSH key + ensure ~/.ssh/runloop.conf                 */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -543,11 +535,33 @@ async function ensureLocalSshTarget(): Promise<boolean> {
   return choice === 'Save here anyway';
 }
 
-async function saveSshConfigForDevbox(api: RunloopApi, devbox: Devbox): Promise<void> {
-  if (!(await ensureLocalSshTarget())) {
-    return;
+/**
+ * Ensures ~/.ssh/runloop.conf holds a correct entry for this devbox and that
+ * the private key file exists. Skips the API + file writes when the config
+ * block for this devbox is already present and the key file exists. Returns
+ * the SSH host alias on success, undefined on failure.
+ */
+async function ensureRunloopSshConfig(
+  devbox: Devbox,
+  context: vscode.ExtensionContext,
+  outputChannel: vscode.OutputChannel
+): Promise<string | undefined> {
+  const alias = hostAliasFor(devbox.id);
+
+  // Fast path: this devbox's block already exists and the key is on disk.
+  const existing = await readSshConfig();
+  if (existing.includes(`Host ${alias}`) && (await privateKeyFileExists())) {
+    outputChannel.appendLine(
+      `[Runloop] SSH config already up to date (Host: ${alias}).`
+    );
+    return alias;
   }
 
+  if (!(await ensureLocalSshTarget())) {
+    return undefined;
+  }
+
+  const api = await requireApi(context);
   const sshKey = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
@@ -558,26 +572,16 @@ async function saveSshConfigForDevbox(api: RunloopApi, devbox: Devbox): Promise<
   );
 
   const keyPath = await writePrivateKey(sshKey.ssh_private_key);
-  const alias = hostAliasFor(sshKey.id);
   const block = buildSshBlock(sshKey, keyPath);
-  const configPath = await writeSshConfig(block, alias);
+  const configPath = await writeSshConfig(block, hostAliasFor(sshKey.id));
 
   // Make sure ~/.ssh/config includes runloop.conf so `ssh runloop-<id>` works.
   await ensureIncludeLine();
 
-  const choice = await vscode.window.showInformationMessage(
-    `SSH config saved to ${configPath}. Connect with: ssh ${alias}`,
-    'Open config',
-    'Copy SSH command'
+  outputChannel.appendLine(
+    `[Runloop] SSH config saved to ${configPath} (Host: ${hostAliasFor(sshKey.id)})`
   );
-
-  if (choice === 'Open config') {
-    const doc = await vscode.workspace.openTextDocument(configPath);
-    await vscode.window.showTextDocument(doc, { preview: false });
-  } else if (choice === 'Copy SSH command') {
-    await vscode.env.clipboard.writeText(`ssh ${alias}`);
-    vscode.window.showInformationMessage(`Copied "ssh ${alias}" to clipboard.`);
-  }
+  return hostAliasFor(sshKey.id);
 }
 
 /**
@@ -590,25 +594,8 @@ export async function connectToDevbox(
   outputChannel: vscode.OutputChannel
 ): Promise<string | undefined> {
   try {
-    const api = await requireApi(context);
-    const sshKey = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Creating SSH key for ${devbox.id}...`,
-        cancellable: false,
-      },
-      () => api.createSshKey(devbox.id)
-    );
-
-    const keyPath = await writePrivateKey(sshKey.ssh_private_key);
-    const alias = hostAliasFor(sshKey.id);
-    const block = buildSshBlock(sshKey, keyPath);
-    const configPath = await writeSshConfig(block, alias);
-    await ensureIncludeLine();
-
     outputChannel.show(true);
-    outputChannel.appendLine(`[Runloop] SSH config saved to ${configPath} (Host: ${alias})`);
-    return alias;
+    return await ensureRunloopSshConfig(devbox, context, outputChannel);
   } catch (err) {
     const message = errMessage(err);
     outputChannel.appendLine(`[Runloop] Error: ${message}`);

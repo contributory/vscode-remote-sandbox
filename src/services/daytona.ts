@@ -12,13 +12,6 @@ const DEFAULT_SSH_EXPIRES_MINUTES = 60;
 const START_POLL_ATTEMPTS = 30;
 const START_POLL_INTERVAL_MS = 2000;
 
-// Create-sandbox defaults (mirror the reference daytona/sandbox.py).
-const DEFAULT_IMAGE = "ubuntu:26.04";
-const DEFAULT_CPU = 4;
-const DEFAULT_MEMORY_GB = 8;
-const DEFAULT_DISK_GB = 10;
-const DEFAULT_AUTO_STOP_MIN = 5;
-
 export interface DaytonaSandbox {
   id: string;
   name?: string;
@@ -113,109 +106,39 @@ function getSshExpiresInMinutes(): number {
   return minutes;
 }
 
-/** Default create-sandbox settings, mirroring the reference daytona/sandbox.py. */
-function getDaytonaCreateDefaults(): {
-  image: string;
-  cpu: number;
-  memory: number;
-  disk: number;
-  autoStopInterval: number;
-} {
-  const config = vscode.workspace.getConfiguration("remoteSandbox");
-  const image = config.get<string>("daytonaImage");
-  const cpu = config.get<number>("daytonaCpu");
-  const memory = config.get<number>("daytonaMemory");
-  const disk = config.get<number>("daytonaDisk");
-  const autoStop = config.get<number>("daytonaAutoStopInterval");
-  return {
-    image: image && image.trim() ? image.trim() : DEFAULT_IMAGE,
-    cpu: cpu && cpu > 0 ? cpu : DEFAULT_CPU,
-    memory: memory && memory > 0 ? memory : DEFAULT_MEMORY_GB,
-    disk: disk && disk > 0 ? disk : DEFAULT_DISK_GB,
-    autoStopInterval:
-      autoStop !== undefined && autoStop >= 0 ? autoStop : DEFAULT_AUTO_STOP_MIN,
-  };
-}
-
-export function registerDaytonaCommands(
-  context: vscode.ExtensionContext,
-  outputChannel: vscode.OutputChannel,
-): void {
-  const disposable = vscode.commands.registerCommand(
-    "remote-sandbox.daytonaGetSandboxSshInfo",
-    async () => {
-      await fetchDaytonaSshConfig(outputChannel);
-    },
-  );
-
-  context.subscriptions.push(disposable);
-}
-
 /** Lists the Daytona sandboxes visible to the configured API key. Returns []
- * when the API key is missing or the request fails. */
-export async function listDaytonaSandboxes(): Promise<DaytonaSandbox[]> {
+ * when the API key is missing or the request fails. When `outputChannel` is
+ * provided, errors and unexpected responses are logged there. */
+export async function listDaytonaSandboxes(
+  outputChannel?: vscode.OutputChannel,
+): Promise<DaytonaSandbox[]> {
   const apiKey = getDaytonaApiKey();
   if (!apiKey) {
     return [];
   }
   const apiUrl = getDaytonaApiUrl();
   try {
-    const response = await daytonaRequest<ListSandboxesResponse>(
-      "/sandbox?limit=100",
-      apiKey,
-      apiUrl,
+    // GET /sandbox returns the full list as a plain JSON array. (The paginated
+    // wrapper { items: [...] } belongs to the DEPRECATED /sandbox/paginated
+    // endpoint.) Handle both shapes so the list never comes back empty.
+    const response = await daytonaRequest<unknown>("/sandbox", apiKey, apiUrl);
+    if (Array.isArray(response)) {
+      return response as DaytonaSandbox[];
+    }
+    const list = response as Partial<ListSandboxesResponse>;
+    if (Array.isArray(list.items)) {
+      return list.items;
+    }
+    outputChannel?.appendLine(
+      "[Daytona] Unexpected response shape from GET /sandbox; no sandboxes found.",
     );
-    return response.items ?? [];
-  } catch {
     return [];
-  }
-}
-
-/** Creates a new Daytona sandbox from the configured base image. Mirrors the
- * reference daytona/sandbox.py (image + resources + idle auto-stop). */
-export async function createDaytonaSandbox(
-  outputChannel: vscode.OutputChannel,
-): Promise<void> {
-  const apiKey = getDaytonaApiKey();
-  if (!apiKey) {
-    promptDaytonaApiKey();
-    return;
-  }
-
-  const apiUrl = getDaytonaApiUrl();
-  const defaults = getDaytonaCreateDefaults();
-  outputChannel.show(true);
-
-  try {
-    const sandbox = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Creating Daytona sandbox (image: ${defaults.image})...`,
-        cancellable: false,
-      },
-      () =>
-        daytonaRequest<DaytonaSandbox>("/sandbox", apiKey, apiUrl, "POST", {
-          cpu: defaults.cpu,
-          memory: defaults.memory,
-          disk: defaults.disk,
-          autoStopInterval: defaults.autoStopInterval,
-          autoArchiveInterval: 0,
-          // Daytona's REST API builds from a Dockerfile rather than a bare
-          // image reference, so wrap the image in a minimal FROM directive.
-          buildInfo: { dockerfileContent: `FROM ${defaults.image}` },
-        }),
-    );
-
-    outputChannel.appendLine(`[Daytona] Created sandbox: ${sandbox.id}`);
-    vscode.window.showInformationMessage(
-      `Daytona sandbox created: ${sandbox.name || sandbox.id}`,
-    );
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    outputChannel.appendLine(`[Daytona] Error: ${message}`);
-    vscode.window.showErrorMessage(
-      `Failed to create Daytona sandbox: ${message}`,
-    );
+    if (outputChannel) {
+      const message = error instanceof Error ? error.message : String(error);
+      outputChannel.appendLine(`[Daytona] Error listing sandboxes: ${message}`);
+    }
+    return [];
   }
 }
 
@@ -291,61 +214,23 @@ export async function startDaytonaSandbox(
     vscode.window.showInformationMessage(
       `Daytona sandbox started: ${sandboxId}.`,
     );
+
+    // Make sure the SSH config holds a valid token so "Connect in..." works
+    // right away (best-effort — never fail the start on config errors).
+    try {
+      await ensureDaytonaSshConfig(sandboxId, outputChannel);
+    } catch (ensureErr) {
+      const ensureMessage =
+        ensureErr instanceof Error ? ensureErr.message : String(ensureErr);
+      outputChannel.appendLine(
+        `[Daytona] Warning: could not refresh SSH config: ${ensureMessage}`,
+      );
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     outputChannel.appendLine(`[Daytona] Error: ${message}`);
     vscode.window.showErrorMessage(
       `Failed to start Daytona sandbox: ${message}`,
-    );
-  }
-}
-
-/** Deletes a Daytona sandbox after confirmation. This is irreversible.
- * Not exposed in the UI; only available via the command palette. */
-export async function deleteDaytonaSandbox(
-  sandboxId: string,
-  outputChannel: vscode.OutputChannel,
-): Promise<void> {
-  const apiKey = getDaytonaApiKey();
-  if (!apiKey) {
-    promptDaytonaApiKey();
-    return;
-  }
-
-  const confirm = await vscode.window.showWarningMessage(
-    `Delete Daytona sandbox ${sandboxId}? This cannot be undone.`,
-    { modal: true },
-    "Delete",
-  );
-  if (confirm !== "Delete") {
-    return;
-  }
-
-  const apiUrl = getDaytonaApiUrl();
-  try {
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Deleting Daytona sandbox ${sandboxId}...`,
-        cancellable: false,
-      },
-      () =>
-        daytonaRequest(
-          `/sandbox/${encodeURIComponent(sandboxId)}`,
-          apiKey,
-          apiUrl,
-          "DELETE",
-        ),
-    );
-    outputChannel.appendLine(`[Daytona] Deleted sandbox: ${sandboxId}`);
-    vscode.window.showInformationMessage(
-      `Daytona sandbox deleted: ${sandboxId}`,
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    outputChannel.appendLine(`[Daytona] Error: ${message}`);
-    vscode.window.showErrorMessage(
-      `Failed to delete Daytona sandbox: ${message}`,
     );
   }
 }
@@ -392,70 +277,12 @@ export async function connectDaytonaSandbox(
       );
     }
 
-    outputChannel.appendLine("[Daytona] Creating SSH access token...");
-    const expiresInMinutes = getSshExpiresInMinutes();
-    const sshAccess = await daytonaRequest<DaytonaSshAccess>(
-      `/sandbox/${encodeURIComponent(sandboxId)}/ssh-access?expiresInMinutes=${expiresInMinutes}`,
-      apiKey,
-      apiUrl,
-      "POST",
-    );
-
-    const target = resolveSshTarget(sshAccess);
-    const hostAlias = getDaytonaHostAlias(sandboxId);
-    const configPath = writeDaytonaConfig(sandboxId, target, outputChannel);
-    outputChannel.appendLine(`[Daytona] SSH config written to: ${configPath}`);
-    return hostAlias;
+    return await ensureDaytonaSshConfig(sandboxId, outputChannel);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     outputChannel.appendLine(`[Daytona] Error: ${message}`);
     vscode.window.showErrorMessage(`Daytona SSH Error: ${message}`);
     return undefined;
-  }
-}
-
-export async function fetchDaytonaSshConfig(
-  outputChannel: vscode.OutputChannel,
-): Promise<void> {
-  const apiKey = getDaytonaApiKey();
-  if (!apiKey) {
-    outputChannel.appendLine(
-      "[Daytona] API key is not configured. Aborting.",
-    );
-    promptDaytonaApiKey();
-    return;
-  }
-
-  const apiUrl = getDaytonaApiUrl();
-  outputChannel.show(true);
-
-  try {
-    outputChannel.appendLine("[Daytona] Looking for an existing sandbox...");
-    const response = await daytonaRequest<ListSandboxesResponse>(
-      "/sandbox?limit=100",
-      apiKey,
-      apiUrl,
-    );
-    const sandbox = (response.items ?? [])[0];
-
-    if (!sandbox) {
-      outputChannel.appendLine("[Daytona] No sandbox found.");
-      vscode.window.showWarningMessage(
-        "No Daytona sandbox found. Please create a sandbox first.",
-      );
-      return;
-    }
-
-    const hostAlias = await connectDaytonaSandbox(sandbox.id, outputChannel);
-    if (hostAlias) {
-      vscode.window.showInformationMessage(
-        `Daytona SSH config saved (Host: ${hostAlias})`,
-      );
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    outputChannel.appendLine(`[Daytona] Error: ${message}`);
-    vscode.window.showErrorMessage(`Daytona SSH Error: ${message}`);
   }
 }
 
@@ -604,9 +431,107 @@ function getDaytonaHostAlias(sandboxId: string): string {
   return `DTN_${sandboxId}`;
 }
 
+function getDaytonaConfigPath(): string {
+  return path.join(os.homedir(), ".ssh", "daytona.conf");
+}
+
+/**
+ * True when daytona.conf already holds a valid (not yet expired) block for the
+ * given host alias. Each block stores a `# expiresAt:` comment so we can decide
+ * whether a fresh SSH access token is needed without calling the API.
+ */
+function isDaytonaConfigCurrent(alias: string): boolean {
+  const configPath = getDaytonaConfigPath();
+  if (!fs.existsSync(configPath)) {
+    return false;
+  }
+  let content: string;
+  try {
+    content = fs.readFileSync(configPath, "utf8");
+  } catch {
+    return false;
+  }
+  const block = extractDaytonaBlock(content, alias);
+  if (!block) {
+    return false;
+  }
+  const expiresMatch = block.match(/#\s*expiresAt:\s*(\S+)/);
+  if (!expiresMatch) {
+    return false;
+  }
+  const expiresAt = Date.parse(expiresMatch[1]);
+  if (!Number.isFinite(expiresAt)) {
+    return false;
+  }
+  // Keep a small buffer so a token that is about to expire is refreshed.
+  return expiresAt > Date.now() + 5 * 60000;
+}
+
+/** Returns the config block for `alias` (from its `Host` line up to the next
+ * `Host` line or the end of the file), or null when absent. */
+function extractDaytonaBlock(content: string, alias: string): string | null {
+  const lines = content.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === `Host ${alias}`);
+  if (start < 0) {
+    return null;
+  }
+  const block: string[] = [];
+  for (let i = start; i < lines.length; i++) {
+    if (i > start && /^\s*Host\s+/i.test(lines[i])) {
+      break;
+    }
+    block.push(lines[i]);
+  }
+  return block.join("\n");
+}
+
+/**
+ * Ensures ~/.ssh/daytona.conf holds a valid entry for this sandbox. A block is
+ * considered current when it exists for this sandbox AND the SSH access token
+ * embedded in it has not yet expired. Mints a fresh token and writes the config
+ * only when the block is missing or stale. Returns the SSH host alias.
+ */
+async function ensureDaytonaSshConfig(
+  sandboxId: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<string | undefined> {
+  const alias = getDaytonaHostAlias(sandboxId);
+  if (isDaytonaConfigCurrent(alias)) {
+    outputChannel.appendLine(
+      `[Daytona] SSH config already up to date (Host: ${alias}).`,
+    );
+    return alias;
+  }
+
+  const apiKey = getDaytonaApiKey();
+  if (!apiKey) {
+    outputChannel.appendLine("[Daytona] API key is not configured. Aborting.");
+    promptDaytonaApiKey();
+    return undefined;
+  }
+
+  outputChannel.appendLine("[Daytona] Creating SSH access token...");
+  const expiresInMinutes = getSshExpiresInMinutes();
+  const sshAccess = await daytonaRequest<DaytonaSshAccess>(
+    `/sandbox/${encodeURIComponent(sandboxId)}/ssh-access?expiresInMinutes=${expiresInMinutes}`,
+    apiKey,
+    getDaytonaApiUrl(),
+    "POST",
+  );
+
+  const target = resolveSshTarget(sshAccess);
+  const expiresAt =
+    sshAccess.expiresAt ??
+    new Date(Date.now() + expiresInMinutes * 60000).toISOString();
+  const configPath = writeDaytonaConfig(sandboxId, target, expiresAt, outputChannel);
+  outputChannel.appendLine(`[Daytona] SSH config written to: ${configPath}`);
+  return alias;
+}
+
 function writeDaytonaConfig(
   sandboxId: string,
   target: ParsedSshTarget,
+  expiresAt: string,
   outputChannel: vscode.OutputChannel,
 ): string {
   const sshDir = path.join(os.homedir(), ".ssh");
@@ -622,7 +547,9 @@ function writeDaytonaConfig(
     configContent += `    Port ${target.port}\n`;
   }
   configContent +=
-    "    StrictHostKeyChecking no\n" + "    UserKnownHostsFile /dev/null\n";
+    "    StrictHostKeyChecking no\n" +
+    "    UserKnownHostsFile /dev/null\n" +
+    `    # expiresAt: ${expiresAt}\n`;
 
   const configPath = path.join(sshDir, "daytona.conf");
 
