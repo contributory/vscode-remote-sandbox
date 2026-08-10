@@ -5,17 +5,17 @@
  *  - include line -> ~/.ssh/config  (Include ~/.ssh/runloop.conf)
  */
 
-import * as fs from 'fs/promises';
-import * as os from 'os';
-import * as path from 'path';
-import type { SshKeyInfo } from './runloopApi';
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
+import type { SshKeyInfo } from "./runloopApi";
 
 export function getSshDir(): string {
-  return path.join(os.homedir(), '.ssh');
+  return path.join(os.homedir(), ".ssh");
 }
 
 export function getSshConfigPath(): string {
-  return path.join(getSshDir(), 'runloop.conf');
+  return path.join(getSshDir(), "runloop.conf");
 }
 
 /**
@@ -23,7 +23,7 @@ export function getSshConfigPath(): string {
  * and overwrites any previous devbox key, so only one devbox is "active" at a
  * time. (OpenSSH refuses keys with broad permissions, hence the 0600 mode.)
  */
-export const SHARED_PRIVATE_KEY_FILE = 'runloop_key';
+export const SHARED_PRIVATE_KEY_FILE = "runloop_key";
 
 export function getPrivateKeyPath(): string {
   return path.join(getSshDir(), SHARED_PRIVATE_KEY_FILE);
@@ -32,14 +32,14 @@ export function getPrivateKeyPath(): string {
 /** Strip scheme (ssh://, https://, ...) and trailing slash from a host URL. */
 export function sanitizeHost(url: string): string {
   let host = url.trim();
-  host = host.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
-  host = host.replace(/\/+$/, '');
+  host = host.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  host = host.replace(/\/+$/, "");
   return host;
 }
 
 /** Host alias used both as the SSH Host name and the config block marker. */
 export function hostAliasFor(devboxId: string): string {
-  return `runloop-${devboxId}`;
+  return `${devboxId}`;
 }
 
 /** Build an SSH config block for one devbox. */
@@ -55,20 +55,24 @@ export function buildSshBlock(info: SshKeyInfo, keyPath: string): string {
     `    UserKnownHostsFile /dev/null`,
     `    ServerAliveInterval 60`,
     `    ServerAliveCountMax 3`,
+    `    ProxyCommand pwsh -NoProfile -Command "openssl s_client -quiet -servername %h -connect ssh.runloop.ai:443 2>\`$null"`,
     `# END RUNLOOP DEVBOX ${alias}`,
-    '',
+    "",
   ];
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /** Write (or replace) the SSH config block for a devbox in ~/.ssh/runloop.conf. */
-export async function writeSshConfig(block: string, alias: string): Promise<string> {
+export async function writeSshConfig(
+  block: string,
+  alias: string,
+): Promise<string> {
   const configPath = getSshConfigPath();
   await fs.mkdir(getSshDir(), { recursive: true });
 
-  let existing = '';
+  let existing = "";
   try {
-    existing = await fs.readFile(configPath, 'utf8');
+    existing = await fs.readFile(configPath, "utf8");
   } catch {
     // file does not exist yet
   }
@@ -80,12 +84,13 @@ export async function writeSshConfig(block: string, alias: string): Promise<stri
 
   let next: string;
   if (startIdx >= 0 && endIdx >= 0) {
-    next = existing.slice(0, startIdx) + block + existing.slice(endIdx + end.length);
+    next =
+      existing.slice(0, startIdx) + block + existing.slice(endIdx + end.length);
   } else {
-    next = existing.trimEnd() + (existing.trim() ? '\n\n' : '') + block;
+    next = existing.trimEnd() + (existing.trim() ? "\n\n" : "") + block;
   }
 
-  await fs.writeFile(configPath, next, 'utf8');
+  await fs.writeFile(configPath, next, "utf8");
   return configPath;
 }
 
@@ -96,8 +101,8 @@ export async function writeSshConfig(block: string, alias: string): Promise<stri
 export async function writePrivateKey(privateKey: string): Promise<string> {
   const keyPath = getPrivateKeyPath();
   await fs.mkdir(getSshDir(), { recursive: true });
-  await fs.writeFile(keyPath, privateKey.trimEnd() + '\n', {
-    encoding: 'utf8',
+  await fs.writeFile(keyPath, privateKey.trimEnd() + "\n", {
+    encoding: "utf8",
     mode: 0o600,
   });
   return keyPath;
@@ -108,19 +113,25 @@ export async function writePrivateKey(privateKey: string): Promise<string> {
  * Returns true if the line was added, false if it already existed.
  */
 export async function ensureIncludeLine(): Promise<boolean> {
-  const configPath = path.join(getSshDir(), 'config');
+  const configPath = path.join(getSshDir(), "config");
   const includeLine = `Include ${getSshConfigPath()}`;
   try {
-    let existing = '';
+    let existing = "";
     try {
-      existing = await fs.readFile(configPath, 'utf8');
+      existing = await fs.readFile(configPath, "utf8");
     } catch {
       // no ~/.ssh/config yet
     }
-    if (existing.includes('runloop.conf')) {
+    if (existing.includes("runloop.conf")) {
       return false;
     }
-    await fs.writeFile(configPath, (existing.trimEnd() ? existing.trimEnd() + '\n\n' : '') + includeLine + '\n', 'utf8');
+    await fs.writeFile(
+      configPath,
+      (existing.trimEnd() ? existing.trimEnd() + "\n\n" : "") +
+        includeLine +
+        "\n",
+      "utf8",
+    );
     return true;
   } catch {
     return false;
@@ -130,9 +141,9 @@ export async function ensureIncludeLine(): Promise<boolean> {
 /** Reads the runloop SSH config file (returns "" when it does not exist). */
 export async function readSshConfig(): Promise<string> {
   try {
-    return await fs.readFile(getSshConfigPath(), 'utf8');
+    return await fs.readFile(getSshConfigPath(), "utf8");
   } catch {
-    return '';
+    return "";
   }
 }
 
