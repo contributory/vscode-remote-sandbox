@@ -12,6 +12,15 @@ export interface E2BSandbox {
   state?: "running" | "paused";
 }
 
+export interface E2BTemplate {
+  templateID: string;
+  names?: string[];
+  aliases?: string[];
+  public?: boolean;
+  createdAt?: string;
+  spawnCount?: number;
+}
+
 export function getE2bApiKey(): string | undefined {
   const config = vscode.workspace.getConfiguration("remoteSandbox");
   const apiKey = config.get<string>("e2bApiKey");
@@ -143,7 +152,27 @@ export async function pauseE2bSandbox(
   }
 }
 
-/** Creates a new E2B sandbox. Prompts the user for a template ID.
+/** Lists available E2B templates for selection.
+ * API: GET /v2/templates */
+async function listE2bTemplates(
+  apiKey: string,
+): Promise<E2BTemplate[]> {
+  try {
+    const response = await e2bRequest<{ templates: E2BTemplate[] } | E2BTemplate[]>(
+      "/v2/templates",
+      apiKey,
+    );
+    if (Array.isArray(response)) {
+      return response;
+    }
+    return response.templates ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Creates a new E2B sandbox. Fetches available templates for the user to
+ * pick from, then offers extended configuration options.
  * API: POST /sandboxes */
 export async function createE2bSandbox(
   outputChannel: vscode.OutputChannel,
@@ -155,14 +184,122 @@ export async function createE2bSandbox(
   }
 
   try {
-    const templateID = await vscode.window.showInputBox({
-      prompt: "E2B template ID (required)",
-      placeHolder: "tmpl-...",
+    // Step 1: pick a template
+    const templates = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Fetching E2B templates...",
+        cancellable: false,
+      },
+      () => listE2bTemplates(apiKey),
+    );
+
+    if (templates.length === 0) {
+      const manual = await vscode.window.showWarningMessage(
+        "No E2B templates found. Enter a template ID manually?",
+        { modal: true },
+        "Enter Template ID",
+        "Cancel",
+      );
+      if (manual !== "Enter Template ID") {
+        return undefined;
+      }
+    }
+
+    let templateID: string | undefined;
+
+    if (templates.length > 0) {
+      const pick = await vscode.window.showQuickPick(
+        templates.map((t) => ({
+          label: t.names?.[0] || t.templateID,
+          description: t.templateID,
+          detail: `aliases: ${(t.aliases ?? []).join(", ") || "none"} · spawns: ${t.spawnCount ?? 0}`,
+          templateID: t.templateID,
+        })),
+        {
+          placeHolder: "Select a template for the new sandbox",
+          matchOnDescription: true,
+          ignoreFocusOut: true,
+        },
+      );
+      if (!pick) {
+        return undefined;
+      }
+      templateID = pick.templateID;
+    } else {
+      const input = await vscode.window.showInputBox({
+        prompt: "E2B template ID",
+        placeHolder: "tmpl-...",
+        ignoreFocusOut: true,
+        validateInput: (v) => (v.trim() ? null : "Template ID is required"),
+      });
+      if (!input) {
+        return undefined;
+      }
+      templateID = input.trim();
+    }
+
+    // Step 2: timeout
+    const timeoutStr = await vscode.window.showInputBox({
+      prompt: "Sandbox timeout in seconds (leave empty for default 300)",
+      placeHolder: "300",
       ignoreFocusOut: true,
+      validateInput: (v) => {
+        if (!v) return null;
+        const n = parseInt(v, 10);
+        return isNaN(n) || n <= 0 ? "Must be a positive number" : null;
+      },
     });
-    if (!templateID) {
+    if (timeoutStr === undefined) {
       return undefined;
     }
+    const timeout = timeoutStr.trim() ? parseInt(timeoutStr, 10) : undefined;
+
+    // Step 3: auto-pause
+    const autoPausePick = await vscode.window.showQuickPick(
+      [
+        { label: "No", description: "Keep running until timeout" },
+        { label: "Yes", description: "Auto-pause sandbox after timeout" },
+      ],
+      { placeHolder: "Auto-pause sandbox after timeout?", ignoreFocusOut: true },
+    );
+    if (!autoPausePick) {
+      return undefined;
+    }
+    const autoPause = autoPausePick.label === "Yes";
+
+    // Step 4: secure mode
+    const securePick = await vscode.window.showQuickPick(
+      [
+        { label: "No", description: "Standard sandbox" },
+        { label: "Yes", description: "Secure all system communication" },
+      ],
+      { placeHolder: "Enable secure mode?", ignoreFocusOut: true },
+    );
+    if (!securePick) {
+      return undefined;
+    }
+    const secure = securePick.label === "Yes";
+
+    // Step 5: internet access
+    const internetPick = await vscode.window.showQuickPick(
+      [
+        { label: "Yes", description: "Allow sandbox to access the internet" },
+        { label: "No", description: "Block internet access" },
+      ],
+      { placeHolder: "Allow internet access?", ignoreFocusOut: true },
+    );
+    if (!internetPick) {
+      return undefined;
+    }
+    const allow_internet_access = internetPick.label === "Yes";
+
+    // Build the request body
+    const body: Record<string, unknown> = { templateID };
+    if (timeout) body.timeout = timeout;
+    if (autoPause) body.autoPause = true;
+    if (!secure) body.secure = false;
+    if (!allow_internet_access) body.allow_internet_access = false;
 
     const sandbox = await vscode.window.withProgress(
       {
@@ -175,7 +312,7 @@ export async function createE2bSandbox(
           `/sandboxes`,
           apiKey,
           "POST",
-          { templateID: templateID.trim(), timeout: SANDBOX_TIMEOUT_SECONDS },
+          body,
         ),
     );
 

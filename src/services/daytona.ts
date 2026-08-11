@@ -185,7 +185,7 @@ export async function stopDaytonaSandbox(
   }
 }
 
-/** Creates a new Daytona sandbox. Prompts the user for a name.
+/** Creates a new Daytona sandbox with full configuration options.
  * API: POST /sandbox */
 export async function createDaytonaSandbox(
   outputChannel: vscode.OutputChannel,
@@ -198,14 +198,127 @@ export async function createDaytonaSandbox(
 
   const apiUrl = getDaytonaApiUrl();
   try {
+    // Step 1: name (optional)
     const name = await vscode.window.showInputBox({
-      prompt: "New Daytona sandbox name (optional)",
+      prompt: "Daytona sandbox name (optional)",
       placeHolder: "my-sandbox",
       ignoreFocusOut: true,
     });
     if (name === undefined) {
       return undefined;
     }
+
+    // Step 2: target region
+    const TARGETS = [
+      { label: "us", description: "United States (default)" },
+      { label: "eu", description: "Europe" },
+      { label: "ap", description: "Asia Pacific" },
+      { label: "us-west", description: "US West" },
+      { label: "us-east", description: "US East" },
+      { label: "eu-west", description: "Europe West" },
+    ];
+    const targetPick = await vscode.window.showQuickPick(TARGETS, {
+      placeHolder: "Select target region (optional)",
+      ignoreFocusOut: true,
+    });
+    const target = targetPick?.label;
+
+    // Step 3: OS / image
+    const IMAGES = [
+      { label: "ubuntu:latest", description: "Ubuntu latest (default)" },
+      { label: "ubuntu:22.04", description: "Ubuntu 22.04 LTS" },
+      { label: "ubuntu:24.04", description: "Ubuntu 24.04 LTS" },
+      { label: "debian:12", description: "Debian 12 Bookworm" },
+      { label: "debian:11", description: "Debian 11 Bullseye" },
+    ];
+    const osPick = await vscode.window.showQuickPick(
+      [
+        { label: "(default)", description: "Use Daytona default OS" },
+        ...IMAGES,
+      ],
+      {
+        placeHolder: "Select OS / image (optional)",
+        ignoreFocusOut: true,
+      },
+    );
+    if (osPick === undefined) {
+      return undefined;
+    }
+    const os = osPick.label === "(default)" ? undefined : osPick.label;
+
+    // Step 4: CPU cores
+    const cpuStr = await vscode.window.showInputBox({
+      prompt: "CPU cores (optional, e.g. 2, 4, 8)",
+      placeHolder: "2",
+      ignoreFocusOut: true,
+      validateInput: (v) => {
+        if (!v) return null;
+        const n = parseInt(v, 10);
+        return isNaN(n) || n < 1 ? "Must be a positive integer" : null;
+      },
+    });
+    if (cpuStr === undefined) {
+      return undefined;
+    }
+    const cpu = cpuStr.trim() ? parseInt(cpuStr, 10) : undefined;
+
+    // Step 5: Memory (GB)
+    const memStr = await vscode.window.showInputBox({
+      prompt: "Memory in GiB (optional, e.g. 4, 8, 16)",
+      placeHolder: "4",
+      ignoreFocusOut: true,
+      validateInput: (v) => {
+        if (!v) return null;
+        const n = parseInt(v, 10);
+        return isNaN(n) || n < 1 ? "Must be a positive integer" : null;
+      },
+    });
+    if (memStr === undefined) {
+      return undefined;
+    }
+    const memory = memStr.trim() ? parseInt(memStr, 10) : undefined;
+
+    // Step 6: Disk (GB)
+    const diskStr = await vscode.window.showInputBox({
+      prompt: "Disk in GiB (optional, e.g. 10, 20, 50)",
+      placeHolder: "10",
+      ignoreFocusOut: true,
+      validateInput: (v) => {
+        if (!v) return null;
+        const n = parseInt(v, 10);
+        return isNaN(n) || n < 1 ? "Must be a positive integer" : null;
+      },
+    });
+    if (diskStr === undefined) {
+      return undefined;
+    }
+    const disk = diskStr.trim() ? parseInt(diskStr, 10) : undefined;
+
+    // Step 7: Auto-stop interval (minutes)
+    const autoStopStr = await vscode.window.showInputBox({
+      prompt: "Auto-stop after N minutes idle (optional, 0 = never)",
+      placeHolder: "30",
+      ignoreFocusOut: true,
+      validateInput: (v) => {
+        if (!v) return null;
+        const n = parseInt(v, 10);
+        return isNaN(n) || n < 0 ? "Must be a non-negative integer" : null;
+      },
+    });
+    if (autoStopStr === undefined) {
+      return undefined;
+    }
+    const autoStopInterval = autoStopStr.trim() ? parseInt(autoStopStr, 10) : undefined;
+
+    // Build the request body
+    const body: Record<string, unknown> = {};
+    if (name.trim()) body.name = name.trim();
+    if (target) body.target = target;
+    if (os) body.os = os;
+    if (cpu !== undefined) body.cpu = cpu;
+    if (memory !== undefined) body.memory = memory;
+    if (disk !== undefined) body.disk = disk;
+    if (autoStopInterval !== undefined) body.autoStopInterval = autoStopInterval;
 
     const sandbox = await vscode.window.withProgress(
       {
@@ -219,7 +332,7 @@ export async function createDaytonaSandbox(
           apiKey,
           apiUrl,
           "POST",
-          name.trim() ? { name: name.trim() } : undefined,
+          body,
         ),
     );
 
