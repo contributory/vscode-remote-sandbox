@@ -133,8 +133,25 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
     private readonly outputChannel: vscode.OutputChannel,
   ) {}
 
-  refresh(): void {
-    this._onDidChangeTreeData.fire();
+  refresh(providerId?: SandboxProviderId): void {
+    if (providerId) {
+      this._onDidChangeTreeData.fire(this.getSectionItemForProvider(providerId));
+    } else {
+      this._onDidChangeTreeData.fire();
+    }
+  }
+
+  private getSectionItemForProvider(provider: SandboxProviderId): SandboxSectionItem {
+    switch (provider) {
+      case "e2b":
+        return new SandboxSectionItem("E2B Sandboxes", "e2b", vscode.TreeItemCollapsibleState.Expanded, "server-process");
+      case "daytona":
+        return new SandboxSectionItem("Daytona Sandboxes", "daytona", vscode.TreeItemCollapsibleState.Expanded, "server");
+      case "runloop":
+        return new SandboxSectionItem("Runloop Devboxes", "runloop", vscode.TreeItemCollapsibleState.Expanded, "package");
+      case "freestyle":
+        return new SandboxSectionItem("Freestyle VMs", "freestyle", vscode.TreeItemCollapsibleState.Expanded, "vm");
+    }
   }
 
   getTreeItem(element: SandboxTreeItem): vscode.TreeItem {

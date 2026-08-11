@@ -82,7 +82,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await pauseE2bSandbox(item.sandboxID, outputChannel);
-        provider.refresh();
+        provider.refresh("e2b");
       },
     ),
     vscode.commands.registerCommand(
@@ -92,14 +92,14 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await resumeE2bSandbox(item.sandboxID, outputChannel);
-        provider.refresh();
+        provider.refresh("e2b");
       },
     ),
     vscode.commands.registerCommand(
       "remote-sandbox.e2bCreateSandbox",
       async () => {
         await createE2bSandbox(outputChannel);
-        provider.refresh();
+        provider.refresh("e2b");
       },
     ),
     vscode.commands.registerCommand(
@@ -109,7 +109,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await deleteE2bSandbox(item.sandboxID, outputChannel);
-        provider.refresh();
+        provider.refresh("e2b");
       },
     ),
   );
@@ -123,7 +123,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await stopDaytonaSandbox(item.sandboxId, outputChannel);
-        provider.refresh();
+        provider.refresh("daytona");
       },
     ),
     vscode.commands.registerCommand(
@@ -133,14 +133,14 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await startDaytonaSandbox(item.sandboxId, outputChannel);
-        provider.refresh();
+        provider.refresh("daytona");
       },
     ),
     vscode.commands.registerCommand(
       "remote-sandbox.daytonaCreateSandbox",
       async () => {
         await createDaytonaSandbox(outputChannel);
-        provider.refresh();
+        provider.refresh("daytona");
       },
     ),
     vscode.commands.registerCommand(
@@ -150,7 +150,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await deleteDaytonaSandbox(item.sandboxId, outputChannel);
-        provider.refresh();
+        provider.refresh("daytona");
       },
     ),
   );
@@ -171,7 +171,7 @@ export function activate(context: vscode.ExtensionContext): void {
           context,
           item instanceof RunloopDevboxItem ? item.devbox : undefined,
         );
-        provider.refresh();
+        provider.refresh("runloop");
       },
     ),
     vscode.commands.registerCommand(
@@ -182,7 +182,7 @@ export function activate(context: vscode.ExtensionContext): void {
           outputChannel,
           item instanceof RunloopDevboxItem ? item.devbox : undefined,
         );
-        provider.refresh();
+        provider.refresh("runloop");
       },
     ),
     vscode.commands.registerCommand(
@@ -192,7 +192,7 @@ export function activate(context: vscode.ExtensionContext): void {
           context,
           item instanceof RunloopDevboxItem ? item.devbox : undefined,
         );
-        provider.refresh();
+        provider.refresh("runloop");
       },
     ),
     vscode.commands.registerCommand(
@@ -220,7 +220,7 @@ export function activate(context: vscode.ExtensionContext): void {
       "remote-sandbox.freestyleCreateVm",
       async () => {
         await createFreestyleVm(outputChannel);
-        provider.refresh();
+        provider.refresh("freestyle");
       },
     ),
     vscode.commands.registerCommand(
@@ -230,7 +230,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await suspendFreestyleVm(item.vm.id, outputChannel);
-        provider.refresh();
+        provider.refresh("freestyle");
       },
     ),
     vscode.commands.registerCommand(
@@ -240,7 +240,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await startFreestyleVm(item.vm.id, outputChannel);
-        provider.refresh();
+        provider.refresh("freestyle");
       },
     ),
     vscode.commands.registerCommand(
@@ -250,7 +250,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await startFreestyleVm(item.vm.id, outputChannel);
-        provider.refresh();
+        provider.refresh("freestyle");
       },
     ),
     vscode.commands.registerCommand(
@@ -260,7 +260,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await deleteFreestyleVm(item.vm.id, outputChannel);
-        provider.refresh();
+        provider.refresh("freestyle");
       },
     ),
     vscode.commands.registerCommand(
