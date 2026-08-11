@@ -2,7 +2,7 @@
   "name": "remote-sandbox",
   "displayName": "Remote Sandbox",
   "description": "Manage E2B, Daytona and Runloop sandboxes and connect to them over SSH from VS Code.",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/starfall-org/remote-sandbox-vscode.git"
