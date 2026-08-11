@@ -41,7 +41,6 @@ import {
   listFreestyleVms,
   setFreestyleApiKey,
   createFreestyleVm,
-  stopFreestyleVm,
   suspendFreestyleVm,
   startFreestyleVm,
   deleteFreestyleVm,
@@ -221,16 +220,6 @@ export function activate(context: vscode.ExtensionContext): void {
       "remote-sandbox.freestyleCreateVm",
       async () => {
         await createFreestyleVm(outputChannel);
-        provider.refresh();
-      },
-    ),
-    vscode.commands.registerCommand(
-      "remote-sandbox.freestyleStopVm",
-      async (item: FreestyleSandboxItem) => {
-        if (!(item instanceof FreestyleSandboxItem)) {
-          return;
-        }
-        await stopFreestyleVm(item.vm.id, outputChannel);
         provider.refresh();
       },
     ),

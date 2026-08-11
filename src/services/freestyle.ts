@@ -267,39 +267,8 @@ export async function createFreestyleVm(
 }
 
 /* ------------------------------------------------------------------ */
-/* Stop / Start / Delete                                              */
+/* Suspend / Start / Delete                                           */
 /* ------------------------------------------------------------------ */
-
-/** Stops a running Freestyle VM. API: POST /v1/vms/{id}/stop */
-export async function stopFreestyleVm(
-  vmId: string,
-  outputChannel: vscode.OutputChannel,
-): Promise<void> {
-  const apiKey = getFreestyleApiKey();
-  if (!apiKey) {
-    promptApiKey();
-    return;
-  }
-
-  try {
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Stopping Freestyle VM ${vmId}...`,
-        cancellable: false,
-      },
-      () => freestyleRequest<void>(`/v1/vms/${encodeURIComponent(vmId)}/stop`, apiKey, "POST"),
-    );
-    outputChannel.appendLine(`[Freestyle] Stopped VM: ${vmId}`);
-    vscode.window.showInformationMessage(
-      `Freestyle VM stopped: ${vmId}. Start it again to reconnect.`,
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    outputChannel.appendLine(`[Freestyle] Error: ${message}`);
-    vscode.window.showErrorMessage(`Failed to stop Freestyle VM: ${message}`);
-  }
-}
 
 /** Suspends a running Freestyle VM to disk. API: POST /v1/vms/{id}/suspend */
 export async function suspendFreestyleVm(

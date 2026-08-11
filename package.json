@@ -2,7 +2,7 @@
   "name": "remote-sandbox",
   "displayName": "Remote Sandbox",
   "description": "Manage E2B, Daytona and Runloop sandboxes and connect to them over SSH from VS Code.",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/starfall-org/remote-sandbox-vscode.git"
@@ -150,11 +150,6 @@
         "icon": "$(add)"
       },
       {
-        "command": "remote-sandbox.freestyleStopVm",
-        "title": "Freestyle: Stop VM",
-        "icon": "$(debug-stop)"
-      },
-      {
         "command": "remote-sandbox.freestyleSuspendVm",
         "title": "Freestyle: Suspend VM",
         "icon": "$(debug-pause)"
@@ -274,14 +269,9 @@
           "group": "3_delete@1"
         },
         {
-          "command": "remote-sandbox.freestyleStopVm",
-          "when": "viewItem == freestyleVmRunning && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@0"
-        },
-        {
           "command": "remote-sandbox.freestyleSuspendVm",
           "when": "viewItem == freestyleVmRunning && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@1"
+          "group": "inline@0"
         },
         {
           "command": "remote-sandbox.freestyleStartVm",
@@ -296,12 +286,12 @@
         {
           "command": "remote-sandbox.connectInCurrentWindow",
           "when": "viewItem =~ /freestyleVm/ && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@2"
+          "group": "inline@1"
         },
         {
           "command": "remote-sandbox.connectInNewWindow",
           "when": "viewItem =~ /freestyleVm/ && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@3"
+          "group": "inline@2"
         },
         {
           "command": "remote-sandbox.freestyleDeleteVm",
