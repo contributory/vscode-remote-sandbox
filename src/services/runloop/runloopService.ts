@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { RunloopApi, RunloopApiError, type Devbox, type DiskSnapshot } from './runloopApi';
 import {
   buildSshBlock,
-  ensureIncludeLine,
   hostAliasFor,
   privateKeyFileExists,
   readSshConfig,
@@ -547,9 +546,6 @@ async function ensureRunloopSshConfig(
   const keyPath = await writePrivateKey(sshKey.ssh_private_key);
   const block = buildSshBlock(sshKey, keyPath);
   const configPath = await writeSshConfig(block, hostAliasFor(sshKey.id));
-
-  // Make sure ~/.ssh/config includes runloop.conf so `ssh runloop-<id>` works.
-  await ensureIncludeLine();
 
   outputChannel.appendLine(
     `[Runloop] SSH config saved to ${configPath} (Host: ${hostAliasFor(sshKey.id)})`

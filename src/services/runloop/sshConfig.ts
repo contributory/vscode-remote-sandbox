@@ -1,8 +1,7 @@
 /**
  * Helpers to persist Runloop devbox SSH credentials on the local machine:
- *  - private key  -> ~/.ssh/runloop-<devboxId>
- *  - SSH config   -> ~/.ssh/runloop.conf  (a block per devbox, idempotent)
- *  - include line -> ~/.ssh/config  (Include ~/.ssh/runloop.conf)
+ *  - private key  -> ~/.ssh/runloop_key
+ *  - SSH config   -> ~/.ssh/runloop.conf (overwritten each time)
  */
 
 import * as fs from "fs/promises";
@@ -62,35 +61,15 @@ export function buildSshBlock(info: SshKeyInfo, keyPath: string): string {
   return lines.join("\n");
 }
 
-/** Write (or replace) the SSH config block for a devbox in ~/.ssh/runloop.conf. */
+/** Write (or replace) the SSH config for a devbox in ~/.ssh/runloop.conf.
+ * Always overwrites the entire file with the new block. */
 export async function writeSshConfig(
   block: string,
-  alias: string,
+  _alias: string,
 ): Promise<string> {
   const configPath = getSshConfigPath();
   await fs.mkdir(getSshDir(), { recursive: true });
-
-  let existing = "";
-  try {
-    existing = await fs.readFile(configPath, "utf8");
-  } catch {
-    // file does not exist yet
-  }
-
-  const begin = `# BEGIN RUNLOOP DEVBOX ${alias}`;
-  const end = `# END RUNLOOP DEVBOX ${alias}`;
-  const startIdx = existing.indexOf(begin);
-  const endIdx = existing.indexOf(end);
-
-  let next: string;
-  if (startIdx >= 0 && endIdx >= 0) {
-    next =
-      existing.slice(0, startIdx) + block + existing.slice(endIdx + end.length);
-  } else {
-    next = existing.trimEnd() + (existing.trim() ? "\n\n" : "") + block;
-  }
-
-  await fs.writeFile(configPath, next, "utf8");
+  await fs.writeFile(configPath, block, "utf8");
   return configPath;
 }
 
@@ -106,36 +85,6 @@ export async function writePrivateKey(privateKey: string): Promise<string> {
     mode: 0o600,
   });
   return keyPath;
-}
-
-/**
- * Make sure ~/.ssh/config has `Include ~/.ssh/runloop.conf`.
- * Returns true if the line was added, false if it already existed.
- */
-export async function ensureIncludeLine(): Promise<boolean> {
-  const configPath = path.join(getSshDir(), "config");
-  const includeLine = `Include ${getSshConfigPath()}`;
-  try {
-    let existing = "";
-    try {
-      existing = await fs.readFile(configPath, "utf8");
-    } catch {
-      // no ~/.ssh/config yet
-    }
-    if (existing.includes("runloop.conf")) {
-      return false;
-    }
-    await fs.writeFile(
-      configPath,
-      (existing.trimEnd() ? existing.trimEnd() + "\n\n" : "") +
-        includeLine +
-        "\n",
-      "utf8",
-    );
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** Reads the runloop SSH config file (returns "" when it does not exist). */
