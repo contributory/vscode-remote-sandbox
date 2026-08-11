@@ -12,7 +12,7 @@ const FREESTYLE_SSH_HOST = "vm-ssh.freestyle.sh";
 
 export interface FreestyleVM {
   id: string;
-  status: "running" | "stopped" | "starting" | "stopping" | "error";
+  state: "starting" | "running" | "suspending" | "suspended" | "stopped" | "lost" | "building";
   name?: string;
   cpu?: number;
   memory?: number;
@@ -252,10 +252,10 @@ export async function createFreestyleVm(
     );
 
     outputChannel.appendLine(
-      `[Freestyle] Created VM: ${vm.id} (status: ${vm.status})`,
+      `[Freestyle] Created VM: ${vm.id} (state: ${vm.state})`,
     );
     vscode.window.showInformationMessage(
-      `Freestyle VM created: ${vm.id} (${vm.status}). Connect via SSH from the tree view.`,
+      `Freestyle VM created: ${vm.id} (${vm.state}). Connect via SSH from the tree view.`,
     );
     return vm.id;
   } catch (error) {
@@ -298,6 +298,37 @@ export async function stopFreestyleVm(
     const message = error instanceof Error ? error.message : String(error);
     outputChannel.appendLine(`[Freestyle] Error: ${message}`);
     vscode.window.showErrorMessage(`Failed to stop Freestyle VM: ${message}`);
+  }
+}
+
+/** Suspends a running Freestyle VM to disk. API: POST /v1/vms/{id}/suspend */
+export async function suspendFreestyleVm(
+  vmId: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getFreestyleApiKey();
+  if (!apiKey) {
+    promptApiKey();
+    return;
+  }
+
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Suspending Freestyle VM ${vmId}...`,
+        cancellable: false,
+      },
+      () => freestyleRequest<void>(`/v1/vms/${encodeURIComponent(vmId)}/suspend`, apiKey, "POST"),
+    );
+    outputChannel.appendLine(`[Freestyle] Suspended VM: ${vmId}`);
+    vscode.window.showInformationMessage(
+      `Freestyle VM suspended: ${vmId}. Resume it to reconnect.`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[Freestyle] Error: ${message}`);
+    vscode.window.showErrorMessage(`Failed to suspend Freestyle VM: ${message}`);
   }
 }
 
@@ -478,9 +509,9 @@ export async function connectFreestyleVm(
   try {
     outputChannel.show(true);
 
-    // Auto-start if stopped
-    if (vm.status === "stopped" || vm.status === "stopping") {
-      outputChannel.appendLine(`[Freestyle] VM ${vm.id} is stopped — starting...`);
+    // Auto-start if stopped or suspended
+    if (vm.state === "stopped" || vm.state === "suspended") {
+      outputChannel.appendLine(`[Freestyle] VM ${vm.id} is ${vm.state} — starting...`);
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,

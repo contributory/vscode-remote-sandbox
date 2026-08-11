@@ -39,7 +39,9 @@ export class E2BSandboxItem extends vscode.TreeItem {
   ) {
     super(sandboxID, vscode.TreeItemCollapsibleState.None);
     this.description = state ?? "";
-    this.iconPath = new vscode.ThemeIcon("server-process");
+    this.iconPath = new vscode.ThemeIcon(
+      state === "paused" ? "vm-outline" : "vm-running",
+    );
     // State-aware contextValue so the UI can show "Pause" for running
     // sandboxes and "Resume" for paused ones. All E2B sandboxes get a delete
     // action.
@@ -57,7 +59,9 @@ export class DaytonaSandboxItem extends vscode.TreeItem {
   ) {
     super(name || sandboxId, vscode.TreeItemCollapsibleState.None);
     this.description = state ?? "";
-    this.iconPath = new vscode.ThemeIcon("server");
+    this.iconPath = new vscode.ThemeIcon(
+      state === "started" ? "vm-running" : "vm-outline",
+    );
     // State-aware contextValue so the UI can show "Stop" when started and
     // "Start" when stopped. All Daytona sandboxes get a delete action.
     this.contextValue =
@@ -70,7 +74,9 @@ export class RunloopDevboxItem extends vscode.TreeItem {
   constructor(public readonly devbox: Devbox) {
     super(devbox.name || devbox.id, vscode.TreeItemCollapsibleState.None);
     this.description = devbox.status;
-    this.iconPath = new vscode.ThemeIcon("package");
+    this.iconPath = new vscode.ThemeIcon(
+      devbox.status === "suspended" ? "vm-outline" : "vm-running",
+    );
     // State-aware contextValue so the UI can show "Suspend" when running and
     // "Resume" when suspended. All devboxes get a delete (shutdown) action.
     this.contextValue =
@@ -84,12 +90,29 @@ export class RunloopDevboxItem extends vscode.TreeItem {
 export class FreestyleSandboxItem extends vscode.TreeItem {
   constructor(public readonly vm: FreestyleVM) {
     super(vm.id, vscode.TreeItemCollapsibleState.None);
-    this.description = vm.status;
-    this.iconPath = new vscode.ThemeIcon("vm");
-    // State-aware contextValue so the UI can show "Stop" when running and
-    // "Start" when stopped.
-    this.contextValue =
-      vm.status === "running" ? "freestyleVmRunning" : "freestyleVmStopped";
+    this.description = vm.state;
+    this.iconPath = new vscode.ThemeIcon(
+      vm.state === "running" ? "vm-running" : "vm-outline",
+    );
+    // State-aware contextValue so the UI can show "Stop"/"Suspend" when
+    // running, "Resume" when suspended, and "Start" when stopped.
+    switch (vm.state) {
+      case "running":
+        this.contextValue = "freestyleVmRunning";
+        break;
+      case "suspended":
+        this.contextValue = "freestyleVmSuspended";
+        break;
+      case "stopped":
+        this.contextValue = "freestyleVmStopped";
+        break;
+      case "lost":
+        this.contextValue = "freestyleVmLost";
+        break;
+      default: // starting, suspending, building
+        this.contextValue = "freestyleVmBusy";
+        break;
+    }
     this.tooltip = `Freestyle VM: ${vm.id}`;
   }
 }

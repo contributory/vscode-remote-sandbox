@@ -2,7 +2,7 @@
   "name": "remote-sandbox",
   "displayName": "Remote Sandbox",
   "description": "Manage E2B, Daytona and Runloop sandboxes and connect to them over SSH from VS Code.",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/starfall-org/remote-sandbox-vscode.git"
@@ -155,8 +155,18 @@
         "icon": "$(debug-stop)"
       },
       {
+        "command": "remote-sandbox.freestyleSuspendVm",
+        "title": "Freestyle: Suspend VM",
+        "icon": "$(debug-pause)"
+      },
+      {
         "command": "remote-sandbox.freestyleStartVm",
         "title": "Freestyle: Start VM",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "remote-sandbox.freestyleResumeVm",
+        "title": "Freestyle: Resume VM",
         "icon": "$(debug-start)"
       },
       {
@@ -269,19 +279,29 @@
           "group": "inline@0"
         },
         {
+          "command": "remote-sandbox.freestyleSuspendVm",
+          "when": "viewItem == freestyleVmRunning && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@1"
+        },
+        {
           "command": "remote-sandbox.freestyleStartVm",
           "when": "viewItem == freestyleVmStopped && view == remote-sandbox-sandboxes-sidebar",
           "group": "inline@0"
         },
         {
+          "command": "remote-sandbox.freestyleResumeVm",
+          "when": "viewItem == freestyleVmSuspended && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@0"
+        },
+        {
           "command": "remote-sandbox.connectInCurrentWindow",
           "when": "viewItem =~ /freestyleVm/ && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@1"
+          "group": "inline@2"
         },
         {
           "command": "remote-sandbox.connectInNewWindow",
           "when": "viewItem =~ /freestyleVm/ && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@2"
+          "group": "inline@3"
         },
         {
           "command": "remote-sandbox.freestyleDeleteVm",

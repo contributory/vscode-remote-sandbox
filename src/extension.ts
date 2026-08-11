@@ -42,6 +42,7 @@ import {
   setFreestyleApiKey,
   createFreestyleVm,
   stopFreestyleVm,
+  suspendFreestyleVm,
   startFreestyleVm,
   deleteFreestyleVm,
   connectFreestyleVm,
@@ -234,7 +235,27 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     ),
     vscode.commands.registerCommand(
+      "remote-sandbox.freestyleSuspendVm",
+      async (item: FreestyleSandboxItem) => {
+        if (!(item instanceof FreestyleSandboxItem)) {
+          return;
+        }
+        await suspendFreestyleVm(item.vm.id, outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
       "remote-sandbox.freestyleStartVm",
+      async (item: FreestyleSandboxItem) => {
+        if (!(item instanceof FreestyleSandboxItem)) {
+          return;
+        }
+        await startFreestyleVm(item.vm.id, outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.freestyleResumeVm",
       async (item: FreestyleSandboxItem) => {
         if (!(item instanceof FreestyleSandboxItem)) {
           return;
@@ -264,7 +285,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const pick = await vscode.window.showQuickPick(
           vms.map((v) => ({
             label: v.id,
-            description: v.status,
+            description: v.state,
             detail: `${v.cpu ?? "?"} vCPU · ${v.memory ?? "?"} GiB RAM · ${v.storage ?? "?"} GiB disk`,
             vm: v,
           })),
