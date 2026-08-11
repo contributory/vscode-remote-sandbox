@@ -119,8 +119,8 @@ export class FreestyleSandboxItem extends vscode.TreeItem {
 
 /**
  * Tree data provider for the "Sandboxes" view. The root shows one collapsible
- * section per provider (E2B, Daytona, Runloop); each section lazily lists the
- * user's sandboxes / devboxes from the corresponding service.
+ * section per provider (Freestyle, E2B, Daytona, Runloop); each section lazily
+ * lists the user's sandboxes / devboxes from the corresponding service.
  */
 export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem> {
   private readonly _onDidChangeTreeData: vscode.EventEmitter<SandboxTreeItem | undefined | null | void> =
@@ -145,6 +145,12 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
     if (!element) {
       return [
         new SandboxSectionItem(
+          "Freestyle VMs",
+          "freestyle",
+          vscode.TreeItemCollapsibleState.Expanded,
+          "vm",
+        ),
+        new SandboxSectionItem(
           "E2B Sandboxes",
           "e2b",
           vscode.TreeItemCollapsibleState.Expanded,
@@ -161,12 +167,6 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
           "runloop",
           vscode.TreeItemCollapsibleState.Expanded,
           "package",
-        ),
-        new SandboxSectionItem(
-          "Freestyle VMs",
-          "freestyle",
-          vscode.TreeItemCollapsibleState.Expanded,
-          "vm",
         ),
       ];
     }
