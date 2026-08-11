@@ -92,14 +92,19 @@ async function freestyleRequest<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  const requestBody = body === undefined ? undefined : JSON.stringify(body);
+  // The Freestyle API expects a JSON request body (e.g. POST /start, /suspend)
+  // even when the caller has no payload. Default an absent body on POST/PUT/
+  // PATCH to `{}` so the server can parse it; otherwise it fails with
+  // "EOF while parsing a value" / 415 without Content-Type.
+  const wantsBody =
+    method === "POST" || method === "PUT" || method === "PATCH";
+  const requestBody =
+    body !== undefined ? JSON.stringify(body) : wantsBody ? "{}" : undefined;
   const response = await fetch(`${FREESTYLE_API_BASE}${requestPath}`, {
     method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      // The Freestyle API requires Content-Type even on body-less
-      // requests (e.g. POST /start), otherwise it returns 415.
-      "Content-Type": "application/json",
+      ...(requestBody ? { "Content-Type": "application/json" } : {}),
     },
     body: requestBody,
   });
