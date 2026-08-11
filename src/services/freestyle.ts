@@ -390,8 +390,7 @@ export function freestyleHostAlias(vmId: string): string {
  * Creates SSH access for a Freestyle VM by:
  * 1. Creating an identity & granting VM permission
  * 2. Creating an access token
- * 3. Finding or generating an SSH key, pushing the public key to the VM
- * 4. Writing ~/.ssh/freestyle.conf with IdentityFile-based auth
+ * 3. Writing ~/.ssh/freestyle.conf with token embedded in User field
  *
  * Returns the SSH host alias on success, undefined on failure.
  */
@@ -432,95 +431,21 @@ async function ensureFreestyleSshConfig(
       {},
     );
 
-    // Step 4: Find existing public key (ưu tiên google_compute_engine.pub)
-    const KEY_CANDIDATES = [
-      { pub: "google_compute_engine.pub", priv: "google_compute_engine" },
-      { pub: "id_ed25519.pub", priv: "id_ed25519" },
-      { pub: "id_rsa.pub", priv: "id_rsa" },
-      { pub: "id_ecdsa.pub", priv: "id_ecdsa" },
-    ];
-    let pubKey: string | undefined;
-    let sshIdentityFile: string | undefined;
-
-    for (const candidate of KEY_CANDIDATES) {
-      const pubPath = path.join(sshDir, candidate.pub);
-      const privPath = path.join(sshDir, candidate.priv);
-      try {
-        pubKey = fs.readFileSync(pubPath, "utf8").trim();
-        if (fs.existsSync(privPath)) {
-          sshIdentityFile = privPath;
-          outputChannel.appendLine(`[Freestyle] Using SSH key: ${pubPath}`);
-          break;
-        }
-      } catch {
-        continue;
-      }
-    }
-
-    if (!pubKey || !sshIdentityFile) {
-      // Generate a dedicated key pair
-      outputChannel.appendLine("[Freestyle] No SSH key found — generating a new key pair...");
-      const keyPath = path.join(sshDir, "freestyle_key");
-      fs.mkdirSync(sshDir, { recursive: true, mode: 0o700 });
-      const { execSync } = require("child_process");
-      execSync(`ssh-keygen -t ed25519 -f "${keyPath}" -N "" -q 2>/dev/null`, { stdio: "ignore" });
-      pubKey = fs.readFileSync(keyPath + ".pub", "utf8").trim();
-      sshIdentityFile = keyPath;
-      outputChannel.appendLine(`[Freestyle] Generated key pair: ${keyPath}`);
-    }
-
-    // Step 5: Push public key into VM via exec API
-    outputChannel.appendLine("[Freestyle] Pushing public key to VM...");
-    const cmd = `mkdir -p ~root/.ssh && chmod 700 ~root/.ssh && cat > ~root/.ssh/authorized_keys << 'FREESTYLE_EOF'\n${pubKey}\nFREESTYLE_EOF\nchmod 600 ~root/.ssh/authorized_keys`;
-    let keyInstalled = false;
-    try {
-      await freestyleRequest<unknown>(
-        `/cloudstate/instances/${encodeURIComponent(vmId)}/exec`,
-        apiKey,
-        "POST",
-        { params: [cmd] },
-      );
-      outputChannel.appendLine("[Freestyle] Public key installed in VM.");
-      keyInstalled = true;
-    } catch (e) {
-      outputChannel.appendLine(
-        `[Freestyle] Could not push key via exec API: ${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-
-    // Step 6: Write SSH config (always overwrite entire file)
+    // Step 4: Write SSH config (token embedded in User field)
     fs.mkdirSync(sshDir, { recursive: true, mode: 0o700 });
 
-    let configContent: string;
-    if (keyInstalled) {
-      configContent = [
-        `# BEGIN FREESTYLE VM ${alias}`,
-        `Host ${alias}`,
-        `    HostName ${FREESTYLE_SSH_HOST}`,
-        `    User ${vmId}+root`,
-        `    IdentityFile ${sshIdentityFile}`,
-        `    StrictHostKeyChecking no`,
-        `    UserKnownHostsFile /dev/null`,
-        `    ServerAliveInterval 60`,
-        `    ServerAliveCountMax 3`,
-        `# END FREESTYLE VM ${alias}`,
-        "",
-      ].join("\n");
-    } else {
-      // Fallback: embed token in username (original approach)
-      configContent = [
-        `# BEGIN FREESTYLE VM ${alias}`,
-        `Host ${alias}`,
-        `    HostName ${FREESTYLE_SSH_HOST}`,
-        `    User ${vmId}+root:${tokenResult.token}`,
-        `    StrictHostKeyChecking no`,
-        `    UserKnownHostsFile /dev/null`,
-        `    ServerAliveInterval 60`,
-        `    ServerAliveCountMax 3`,
-        `# END FREESTYLE VM ${alias}`,
-        "",
-      ].join("\n");
-    }
+    const configContent = [
+      `# BEGIN FREESTYLE VM ${alias}`,
+      `Host ${alias}`,
+      `    HostName ${FREESTYLE_SSH_HOST}`,
+      `    User ${vmId}+root:${tokenResult.token}`,
+      `    StrictHostKeyChecking no`,
+      `    UserKnownHostsFile /dev/null`,
+      `    ServerAliveInterval 60`,
+      `    ServerAliveCountMax 3`,
+      `# END FREESTYLE VM ${alias}`,
+      "",
+    ].join("\n");
 
     fs.writeFileSync(configPath, configContent, { mode: 0o600 });
 
