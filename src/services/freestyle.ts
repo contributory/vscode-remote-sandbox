@@ -97,7 +97,9 @@ async function freestyleRequest<T>(
     method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      ...(requestBody ? { "Content-Type": "application/json" } : {}),
+      // The Freestyle API requires Content-Type even on body-less
+      // requests (e.g. POST /start), otherwise it returns 415.
+      "Content-Type": "application/json",
     },
     body: requestBody,
   });
