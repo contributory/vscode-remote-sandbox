@@ -141,34 +141,6 @@
         "icon": "$(trash)"
       },
       {
-        "command": "remote-sandbox.superserveSetApiKey",
-        "title": "Superserve: Set API Key"
-      },
-      {
-        "command": "remote-sandbox.superserveCreateSandbox",
-        "title": "Superserve: Create Sandbox",
-        "icon": "$(add)"
-      },
-      {
-        "command": "remote-sandbox.superservePauseSandbox",
-        "title": "Superserve: Pause Sandbox",
-        "icon": "$(debug-pause)"
-      },
-      {
-        "command": "remote-sandbox.superserveResumeSandbox",
-        "title": "Superserve: Resume Sandbox",
-        "icon": "$(debug-start)"
-      },
-      {
-        "command": "remote-sandbox.superserveDeleteSandbox",
-        "title": "Superserve: Delete Sandbox",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "remote-sandbox.superserveListSandboxes",
-        "title": "Superserve: List Sandboxes"
-      },
-      {
         "command": "remote-sandbox.freestyleSetApiKey",
         "title": "Freestyle: Set API Key"
       },
@@ -237,11 +209,6 @@
           "group": "1_snapshots@1"
         },
         {
-          "command": "remote-sandbox.superserveCreateSandbox",
-          "when": "viewItem == superserveSection && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@0"
-        },
-        {
           "command": "remote-sandbox.freestyleCreateVm",
           "when": "viewItem == freestyleSection && view == remote-sandbox-sandboxes-sidebar",
           "group": "inline@0"
@@ -294,21 +261,6 @@
         {
           "command": "remote-sandbox.daytonaDeleteSandbox",
           "when": "viewItem =~ /daytonaSandbox/ && view == remote-sandbox-sandboxes-sidebar",
-          "group": "3_delete@1"
-        },
-        {
-          "command": "remote-sandbox.superservePauseSandbox",
-          "when": "viewItem == superserveSandboxActive && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@0"
-        },
-        {
-          "command": "remote-sandbox.superserveResumeSandbox",
-          "when": "viewItem == superserveSandboxPaused && view == remote-sandbox-sandboxes-sidebar",
-          "group": "inline@0"
-        },
-        {
-          "command": "remote-sandbox.superserveDeleteSandbox",
-          "when": "viewItem =~ /superserveSandbox/ && view == remote-sandbox-sandboxes-sidebar",
           "group": "3_delete@1"
         },
         {
@@ -397,12 +349,6 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Your [Runloop](https://runloop.ai) API key. The extension uses this to authenticate with the Runloop API. Set it here, run the **Runloop: Set API Key** command, or use the `RUNLOOP_API_KEY` environment variable.",
-          "editPresentation": "password"
-        },
-        "remoteSandbox.superserveApiKey": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Your [Superserve](https://superserve.ai) API key. The extension uses this to authenticate with the Superserve API. Set it here, run the **Superserve: Set API Key** command, or use the `SUPERSERVE_API_KEY` environment variable.",
           "editPresentation": "password"
         },
         "remoteSandbox.freestyleApiKey": {

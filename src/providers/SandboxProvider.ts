@@ -4,7 +4,6 @@ import { hasE2bApiKey, listE2bSandboxes } from "../services/e2b";
 import { hasDaytonaApiKey, listDaytonaSandboxes } from "../services/daytona";
 import { hasRunloopApiKey, listDevboxes } from "../services/runloop/runloopService";
 import type { Devbox } from "../services/runloop/runloopApi";
-import { hasSuperserveApiKey, listSuperserveSandboxes, type SuperserveSandbox } from "../services/superserve";
 import { hasFreestyleApiKey, listFreestyleVms, type FreestyleVM } from "../services/freestyle";
 
 export type SandboxTreeItem = vscode.TreeItem;
@@ -82,21 +81,6 @@ export class RunloopDevboxItem extends vscode.TreeItem {
   }
 }
 
-export class SuperserveSandboxItem extends vscode.TreeItem {
-  constructor(public readonly sandbox: SuperserveSandbox) {
-    super(sandbox.name || sandbox.id, vscode.TreeItemCollapsibleState.None);
-    this.description = sandbox.status;
-    this.iconPath = new vscode.ThemeIcon("cloud");
-    // State-aware contextValue so the UI can show "Pause" when active and
-    // "Resume" when paused.
-    this.contextValue =
-      sandbox.status === "paused"
-        ? "superserveSandboxPaused"
-        : "superserveSandboxActive";
-    this.tooltip = `Superserve sandbox: ${sandbox.id}`;
-  }
-}
-
 export class FreestyleSandboxItem extends vscode.TreeItem {
   constructor(public readonly vm: FreestyleVM) {
     super(vm.id, vscode.TreeItemCollapsibleState.None);
@@ -156,12 +140,6 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
           "package",
         ),
         new SandboxSectionItem(
-          "Superserve Sandboxes",
-          "superserve",
-          vscode.TreeItemCollapsibleState.Expanded,
-          "cloud",
-        ),
-        new SandboxSectionItem(
           "Freestyle VMs",
           "freestyle",
           vscode.TreeItemCollapsibleState.Expanded,
@@ -178,8 +156,6 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
           return this.getDaytonaChildren();
         case "runloop":
           return this.getRunloopChildren();
-        case "superserve":
-          return this.getSuperserveChildren();
         case "freestyle":
           return this.getFreestyleChildren();
       }
@@ -237,37 +213,12 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
     return devboxes.map((d) => new RunloopDevboxItem(d));
   }
 
-  private async getSuperserveChildren(): Promise<SandboxTreeItem[]> {
-    const items: SandboxTreeItem[] = [];
-    if (!hasSuperserveApiKey()) {
-      items.push(new ActionItem("Set Superserve API key...", "remote-sandbox.superserveSetApiKey", "key"));
-      return items;
-    }
-    items.push(new ActionItem(
-      "Create Superserve sandbox...",
-      "remote-sandbox.superserveCreateSandbox",
-      "add",
-    ));
-    const sandboxes = await listSuperserveSandboxes();
-    if (sandboxes.length === 0) {
-      items.push(new ActionItem("No Superserve sandboxes found", undefined, "info"));
-    } else {
-      items.push(...sandboxes.map((s) => new SuperserveSandboxItem(s)));
-    }
-    return items;
-  }
-
   private async getFreestyleChildren(): Promise<SandboxTreeItem[]> {
     const items: SandboxTreeItem[] = [];
     if (!hasFreestyleApiKey()) {
       items.push(new ActionItem("Set Freestyle API key...", "remote-sandbox.freestyleSetApiKey", "key"));
       return items;
     }
-    items.push(new ActionItem(
-      "Create Freestyle VM...",
-      "remote-sandbox.freestyleCreateVm",
-      "add",
-    ));
     const vms = await listFreestyleVms();
     if (vms.length === 0) {
       items.push(new ActionItem("No Freestyle VMs found", undefined, "info"));
