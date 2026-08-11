@@ -513,29 +513,6 @@ export async function listDevboxes(context: vscode.ExtensionContext): Promise<De
 /* ------------------------------------------------------------------ */
 
 /**
- * SSH files are saved to ~/.ssh of the machine running the extension host.
- * In a remote session (SSH / WSL / container) that would be the REMOTE
- * machine, not the user's local machine. Warn and let the user decide.
- */
-async function ensureLocalSshTarget(): Promise<boolean> {
-  const remote = vscode.env.remoteName;
-  if (!remote) {
-    return true; // running on the local desktop machine
-  }
-  const detail =
-    remote === 'wsl'
-      ? 'WSL session: files would go to the WSL machine (~/.ssh), not Windows (C:\\Users\\<you>\\.ssh).'
-      : `Remote session (${remote}): files would go to the REMOTE machine's ~/.ssh, not your local machine.`;
-  const choice = await vscode.window.showWarningMessage(
-    `SSH files are saved to ~/.ssh of the machine running VS Code.\n${detail}`,
-    { modal: true },
-    'Cancel',
-    'Save here anyway'
-  );
-  return choice === 'Save here anyway';
-}
-
-/**
  * Ensures ~/.ssh/runloop.conf holds a correct entry for this devbox and that
  * the private key file exists. Skips the API + file writes when the config
  * block for this devbox is already present and the key file exists. Returns
@@ -555,10 +532,6 @@ async function ensureRunloopSshConfig(
       `[Runloop] SSH config already up to date (Host: ${alias}).`
     );
     return alias;
-  }
-
-  if (!(await ensureLocalSshTarget())) {
-    return undefined;
   }
 
   const api = await requireApi(context);
@@ -586,7 +559,8 @@ async function ensureRunloopSshConfig(
 
 /**
  * Configures SSH for a specific devbox and returns the SSH host alias so the
- * caller can open a Remote-SSH window. Returns undefined on failure.
+ * caller can open a Remote-SSH window. Automatically resumes the devbox if it
+ * is suspended. Returns undefined on failure.
  */
 export async function connectToDevbox(
   devbox: Devbox,
@@ -595,6 +569,22 @@ export async function connectToDevbox(
 ): Promise<string | undefined> {
   try {
     outputChannel.show(true);
+
+    // Auto-resume if the devbox is suspended
+    if (devbox.status === 'suspended') {
+      outputChannel.appendLine(`[Runloop] Devbox ${devbox.id} is suspended — resuming...`);
+      const api = await requireApi(context);
+      const resumed = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Resuming devbox ${devbox.name || devbox.id}...`,
+          cancellable: false,
+        },
+        () => api.resumeDevbox(devbox.id)
+      );
+      devbox = resumed;
+    }
+
     return await ensureRunloopSshConfig(devbox, context, outputChannel);
   } catch (err) {
     const message = errMessage(err);

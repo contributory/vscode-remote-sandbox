@@ -5,6 +5,8 @@ import {
   setE2bApiKey,
   pauseE2bSandbox,
   resumeE2bSandbox,
+  createE2bSandbox,
+  deleteE2bSandbox,
 } from "./services/e2b";
 import {
   connectDaytonaSandbox,
@@ -12,6 +14,8 @@ import {
   setDaytonaApiKey,
   stopDaytonaSandbox,
   startDaytonaSandbox,
+  createDaytonaSandbox,
+  deleteDaytonaSandbox,
 } from "./services/daytona";
 import {
   createDevbox,
@@ -58,7 +62,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
-  // E2B sandbox lifecycle (pause / resume)
+  // E2B sandbox lifecycle (pause / resume / create / delete)
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "remote-sandbox.e2bPauseSandbox",
@@ -80,9 +84,26 @@ export function activate(context: vscode.ExtensionContext): void {
         provider.refresh();
       },
     ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.e2bCreateSandbox",
+      async () => {
+        await createE2bSandbox(outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.e2bDeleteSandbox",
+      async (item: E2BSandboxItem) => {
+        if (!(item instanceof E2BSandboxItem)) {
+          return;
+        }
+        await deleteE2bSandbox(item.sandboxID, outputChannel);
+        provider.refresh();
+      },
+    ),
   );
 
-  // Daytona sandbox lifecycle (stop / start)
+  // Daytona sandbox lifecycle (stop / start / create / delete)
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "remote-sandbox.daytonaStopSandbox",
@@ -101,6 +122,23 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await startDaytonaSandbox(item.sandboxId, outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.daytonaCreateSandbox",
+      async () => {
+        await createDaytonaSandbox(outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.daytonaDeleteSandbox",
+      async (item: DaytonaSandboxItem) => {
+        if (!(item instanceof DaytonaSandboxItem)) {
+          return;
+        }
+        await deleteDaytonaSandbox(item.sandboxId, outputChannel);
         provider.refresh();
       },
     ),

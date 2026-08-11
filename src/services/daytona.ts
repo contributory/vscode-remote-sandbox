@@ -185,6 +185,103 @@ export async function stopDaytonaSandbox(
   }
 }
 
+/** Creates a new Daytona sandbox. Prompts the user for a name.
+ * API: POST /sandbox */
+export async function createDaytonaSandbox(
+  outputChannel: vscode.OutputChannel,
+): Promise<string | undefined> {
+  const apiKey = getDaytonaApiKey();
+  if (!apiKey) {
+    promptDaytonaApiKey();
+    return undefined;
+  }
+
+  const apiUrl = getDaytonaApiUrl();
+  try {
+    const name = await vscode.window.showInputBox({
+      prompt: "New Daytona sandbox name (optional)",
+      placeHolder: "my-sandbox",
+      ignoreFocusOut: true,
+    });
+    if (name === undefined) {
+      return undefined;
+    }
+
+    const sandbox = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Creating Daytona sandbox...",
+        cancellable: false,
+      },
+      () =>
+        daytonaRequest<DaytonaSandbox>(
+          `/sandbox`,
+          apiKey,
+          apiUrl,
+          "POST",
+          name.trim() ? { name: name.trim() } : undefined,
+        ),
+    );
+
+    const label = sandbox.name || sandbox.id;
+    outputChannel.appendLine(`[Daytona] Created sandbox: ${label} (${sandbox.id})`);
+    vscode.window.showInformationMessage(
+      `Daytona sandbox created: ${label} (${sandbox.id})`,
+    );
+    return sandbox.id;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[Daytona] Error creating sandbox: ${message}`);
+    vscode.window.showErrorMessage(`Failed to create Daytona sandbox: ${message}`);
+    return undefined;
+  }
+}
+
+/** Deletes a Daytona sandbox (permanently). */
+export async function deleteDaytonaSandbox(
+  sandboxId: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getDaytonaApiKey();
+  if (!apiKey) {
+    promptDaytonaApiKey();
+    return;
+  }
+
+  const apiUrl = getDaytonaApiUrl();
+  try {
+    const confirm = await vscode.window.showWarningMessage(
+      `Delete Daytona sandbox ${sandboxId}? This cannot be undone.`,
+      { modal: true },
+      "Delete",
+    );
+    if (confirm !== "Delete") {
+      return;
+    }
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Deleting Daytona sandbox ${sandboxId}...`,
+        cancellable: false,
+      },
+      () =>
+        daytonaRequest(
+          `/sandbox/${encodeURIComponent(sandboxId)}`,
+          apiKey,
+          apiUrl,
+          "DELETE",
+        ),
+    );
+    outputChannel.appendLine(`[Daytona] Deleted sandbox: ${sandboxId}`);
+    vscode.window.showInformationMessage(`Daytona sandbox deleted: ${sandboxId}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[Daytona] Error: ${message}`);
+    vscode.window.showErrorMessage(`Failed to delete Daytona sandbox: ${message}`);
+  }
+}
+
 /** Starts a stopped Daytona sandbox. */
 export async function startDaytonaSandbox(
   sandboxId: string,

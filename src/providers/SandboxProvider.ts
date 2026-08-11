@@ -40,7 +40,8 @@ export class E2BSandboxItem extends vscode.TreeItem {
     this.description = state ?? "";
     this.iconPath = new vscode.ThemeIcon("server-process");
     // State-aware contextValue so the UI can show "Pause" for running
-    // sandboxes and "Resume" for paused ones.
+    // sandboxes and "Resume" for paused ones. All E2B sandboxes get a delete
+    // action.
     this.contextValue =
       state === "paused" ? "e2bSandboxPaused" : "e2bSandboxRunning";
     this.tooltip = `E2B sandbox: ${sandboxID}`;
@@ -57,7 +58,7 @@ export class DaytonaSandboxItem extends vscode.TreeItem {
     this.description = state ?? "";
     this.iconPath = new vscode.ThemeIcon("server");
     // State-aware contextValue so the UI can show "Stop" when started and
-    // "Start" when stopped.
+    // "Start" when stopped. All Daytona sandboxes get a delete action.
     this.contextValue =
       state === "started" ? "daytonaSandboxStarted" : "daytonaSandboxStopped";
     this.tooltip = `Daytona sandbox: ${sandboxId}`;
@@ -70,7 +71,7 @@ export class RunloopDevboxItem extends vscode.TreeItem {
     this.description = devbox.status;
     this.iconPath = new vscode.ThemeIcon("package");
     // State-aware contextValue so the UI can show "Suspend" when running and
-    // "Resume" when suspended.
+    // "Resume" when suspended. All devboxes get a delete (shutdown) action.
     this.contextValue =
       devbox.status === "suspended"
         ? "runloopDevboxSuspended"
@@ -142,33 +143,43 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
   }
 
   private async getE2bChildren(): Promise<SandboxTreeItem[]> {
+    const items: SandboxTreeItem[] = [];
     if (!hasE2bApiKey()) {
-      return [
-        new ActionItem("Set E2B API key...", "remote-sandbox.e2bSetApiKey", "key"),
-      ];
+      items.push(new ActionItem("Set E2B API key...", "remote-sandbox.e2bSetApiKey", "key"));
+      return items;
     }
+    items.push(new ActionItem("Create E2B sandbox...", "remote-sandbox.e2bCreateSandbox", "add"));
     const sandboxes = await listE2bSandboxes();
     if (sandboxes.length === 0) {
-      return [new ActionItem("No E2B sandboxes found", undefined, "info")];
+      items.push(new ActionItem("No E2B sandboxes found", undefined, "info"));
+    } else {
+      items.push(...sandboxes.map((s) => new E2BSandboxItem(s.sandboxID, s.state)));
     }
-    return sandboxes.map((s) => new E2BSandboxItem(s.sandboxID, s.state));
+    return items;
   }
 
   private async getDaytonaChildren(): Promise<SandboxTreeItem[]> {
+    const items: SandboxTreeItem[] = [];
     if (!hasDaytonaApiKey()) {
-      return [
-        new ActionItem(
-          "Set Daytona API key...",
-          "remote-sandbox.daytonaSetApiKey",
-          "key",
-        ),
-      ];
+      items.push(new ActionItem(
+        "Set Daytona API key...",
+        "remote-sandbox.daytonaSetApiKey",
+        "key",
+      ));
+      return items;
     }
+    items.push(new ActionItem(
+      "Create Daytona sandbox...",
+      "remote-sandbox.daytonaCreateSandbox",
+      "add",
+    ));
     const sandboxes = await listDaytonaSandboxes();
     if (sandboxes.length === 0) {
-      return [new ActionItem("No Daytona sandboxes found", undefined, "info")];
+      items.push(new ActionItem("No Daytona sandboxes found", undefined, "info"));
+    } else {
+      items.push(...sandboxes.map((s) => new DaytonaSandboxItem(s.id, s.name, s.state)));
     }
-    return sandboxes.map((s) => new DaytonaSandboxItem(s.id, s.name, s.state));
+    return items;
   }
 
   private async getRunloopChildren(): Promise<SandboxTreeItem[]> {

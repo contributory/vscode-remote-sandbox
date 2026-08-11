@@ -2,7 +2,7 @@
   "name": "remote-sandbox",
   "displayName": "Remote Sandbox",
   "description": "Manage E2B, Daytona and Runloop sandboxes and connect to them over SSH from VS Code.",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/starfall-org/remote-sandbox-vscode.git"
@@ -117,8 +117,28 @@
         "title": "E2B: Set API Key"
       },
       {
+        "command": "remote-sandbox.e2bCreateSandbox",
+        "title": "E2B: Create Sandbox",
+        "icon": "$(add)"
+      },
+      {
+        "command": "remote-sandbox.e2bDeleteSandbox",
+        "title": "E2B: Delete Sandbox",
+        "icon": "$(trash)"
+      },
+      {
         "command": "remote-sandbox.daytonaSetApiKey",
         "title": "Daytona: Set API Key"
+      },
+      {
+        "command": "remote-sandbox.daytonaCreateSandbox",
+        "title": "Daytona: Create Sandbox",
+        "icon": "$(add)"
+      },
+      {
+        "command": "remote-sandbox.daytonaDeleteSandbox",
+        "title": "Daytona: Delete Sandbox",
+        "icon": "$(trash)"
       },
       {
         "command": "remote-sandbox.connectInCurrentWindow",
@@ -140,6 +160,16 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "remote-sandbox.e2bCreateSandbox",
+          "when": "viewItem == e2bSection && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@0"
+        },
+        {
+          "command": "remote-sandbox.daytonaCreateSandbox",
+          "when": "viewItem == daytonaSection && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@0"
+        },
         {
           "command": "remote-sandbox.runloopCreateDevbox",
           "when": "viewItem == runloopSection && view == remote-sandbox-sandboxes-sidebar",
@@ -171,6 +201,11 @@
           "group": "inline@2"
         },
         {
+          "command": "remote-sandbox.e2bDeleteSandbox",
+          "when": "viewItem =~ /e2bSandbox/ && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@3"
+        },
+        {
           "command": "remote-sandbox.daytonaStopSandbox",
           "when": "viewItem == daytonaSandboxStarted && view == remote-sandbox-sandboxes-sidebar",
           "group": "inline@0"
@@ -189,6 +224,11 @@
           "command": "remote-sandbox.connectInNewWindow",
           "when": "viewItem =~ /daytonaSandbox/ && view == remote-sandbox-sandboxes-sidebar",
           "group": "inline@2"
+        },
+        {
+          "command": "remote-sandbox.daytonaDeleteSandbox",
+          "when": "viewItem =~ /daytonaSandbox/ && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@3"
         },
         {
           "command": "remote-sandbox.runloopSuspendDevbox",
@@ -211,9 +251,14 @@
           "group": "inline@2"
         },
         {
-          "command": "remote-sandbox.runloopSnapshotDevbox",
+          "command": "remote-sandbox.runloopShutdownDevbox",
           "when": "viewItem =~ /runloopDevbox/ && view == remote-sandbox-sandboxes-sidebar",
           "group": "inline@3"
+        },
+        {
+          "command": "remote-sandbox.runloopSnapshotDevbox",
+          "when": "viewItem =~ /runloopDevbox/ && view == remote-sandbox-sandboxes-sidebar",
+          "group": "inline@4"
         }
       ]
     },

@@ -143,6 +143,99 @@ export async function pauseE2bSandbox(
   }
 }
 
+/** Creates a new E2B sandbox. Prompts the user for a template ID.
+ * API: POST /sandboxes */
+export async function createE2bSandbox(
+  outputChannel: vscode.OutputChannel,
+): Promise<string | undefined> {
+  const apiKey = getE2bApiKey();
+  if (!apiKey) {
+    promptE2bApiKey();
+    return undefined;
+  }
+
+  try {
+    const templateID = await vscode.window.showInputBox({
+      prompt: "E2B template ID (required)",
+      placeHolder: "tmpl-...",
+      ignoreFocusOut: true,
+    });
+    if (!templateID) {
+      return undefined;
+    }
+
+    const sandbox = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Creating E2B sandbox...",
+        cancellable: false,
+      },
+      () =>
+        e2bRequest<E2BSandbox>(
+          `/sandboxes`,
+          apiKey,
+          "POST",
+          { templateID: templateID.trim(), timeout: SANDBOX_TIMEOUT_SECONDS },
+        ),
+    );
+
+    outputChannel.appendLine(`[E2B] Created sandbox: ${sandbox.sandboxID}`);
+    vscode.window.showInformationMessage(
+      `E2B sandbox created: ${sandbox.sandboxID}`,
+    );
+    return sandbox.sandboxID;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[E2B] Error creating sandbox: ${message}`);
+    vscode.window.showErrorMessage(`Failed to create E2B sandbox: ${message}`);
+    return undefined;
+  }
+}
+
+/** Deletes (kills) an E2B sandbox permanently.
+ * API: POST /sandboxes/{id}/kill */
+export async function deleteE2bSandbox(
+  sandboxID: string,
+  outputChannel: vscode.OutputChannel,
+): Promise<void> {
+  const apiKey = getE2bApiKey();
+  if (!apiKey) {
+    promptE2bApiKey();
+    return;
+  }
+
+  try {
+    const confirm = await vscode.window.showWarningMessage(
+      `Delete E2B sandbox ${sandboxID}? This cannot be undone.`,
+      { modal: true },
+      "Delete",
+    );
+    if (confirm !== "Delete") {
+      return;
+    }
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Deleting E2B sandbox ${sandboxID}...`,
+        cancellable: false,
+      },
+      () =>
+        e2bRequest(
+          `/sandboxes/${encodeURIComponent(sandboxID)}/kill`,
+          apiKey,
+          "POST",
+        ),
+    );
+    outputChannel.appendLine(`[E2B] Deleted sandbox: ${sandboxID}`);
+    vscode.window.showInformationMessage(`E2B sandbox deleted: ${sandboxID}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`[E2B] Error: ${message}`);
+    vscode.window.showErrorMessage(`Failed to delete E2B sandbox: ${message}`);
+  }
+}
+
 /** Resumes a paused E2B sandbox. State is preserved and can be paused again. */
 export async function resumeE2bSandbox(
   sandboxID: string,
