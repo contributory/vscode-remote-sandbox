@@ -33,8 +33,30 @@ import {
   E2BSandboxItem,
   DaytonaSandboxItem,
   RunloopDevboxItem,
+  SuperserveSandboxItem,
+  FreestyleSandboxItem,
   SandboxTreeItem,
 } from "./providers/SandboxProvider";
+import {
+  hasSuperserveApiKey,
+  listSuperserveSandboxes,
+  setSuperserveApiKey,
+  createSuperserveSandbox,
+  pauseSuperserveSandbox,
+  resumeSuperserveSandbox,
+  deleteSuperserveSandbox,
+  activateSuperserveSandbox,
+} from "./services/superserve";
+import {
+  hasFreestyleApiKey,
+  listFreestyleVms,
+  setFreestyleApiKey,
+  createFreestyleVm,
+  stopFreestyleVm,
+  startFreestyleVm,
+  deleteFreestyleVm,
+  connectFreestyleVm,
+} from "./services/freestyle";
 
 export function activate(context: vscode.ExtensionContext): void {
   const outputChannel = vscode.window.createOutputChannel("Remote Sandbox");
@@ -199,6 +221,82 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
+  // Superserve service
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "remote-sandbox.superserveSetApiKey",
+      () => setSuperserveApiKey(),
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.superserveCreateSandbox",
+      async () => {
+        await createSuperserveSandbox(outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.superservePauseSandbox",
+      async (item: SuperserveSandboxItem) => {
+        if (!(item instanceof SuperserveSandboxItem)) {
+          return;
+        }
+        await pauseSuperserveSandbox(item.sandbox.id, outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.superserveResumeSandbox",
+      async (item: SuperserveSandboxItem) => {
+        if (!(item instanceof SuperserveSandboxItem)) {
+          return;
+        }
+        await resumeSuperserveSandbox(item.sandbox.id, outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.superserveDeleteSandbox",
+      async (item: SuperserveSandboxItem) => {
+        if (!(item instanceof SuperserveSandboxItem)) {
+          return;
+        }
+        await deleteSuperserveSandbox(item.sandbox.id, outputChannel);
+        provider.refresh();
+      },
+    ),
+    vscode.commands.registerCommand(
+      "remote-sandbox.superserveListSandboxes",
+      async () => {
+        const sandboxes = await listSuperserveSandboxes(outputChannel);
+        if (sandboxes.length === 0) {
+          vscode.window.showInformationMessage("No Superserve sandboxes found.");
+          return;
+        }
+        const pick = await vscode.window.showQuickPick(
+          sandboxes.map((s) => ({
+            label: s.name || s.id,
+            description: s.status,
+            detail: s.id,
+            sandbox: s,
+          })),
+          {
+            placeHolder: "Select a Superserve sandbox to activate",
+            matchOnDescription: true,
+          },
+        );
+        if (!pick) {
+          return;
+        }
+        const updated = await activateSuperserveSandbox(pick.sandbox, outputChannel);
+        if (updated) {
+          vscode.window.showInformationMessage(
+            `Superserve sandbox "${updated.name}" is ${updated.status}.`,
+          );
+        }
+      },
+    ),
+  );
+
   // List sandboxes / devboxes (command palette, QuickPick → connect)
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -323,6 +421,16 @@ export function activate(context: vscode.ExtensionContext): void {
       hostAlias = await connectDaytonaSandbox(item.sandboxId, outputChannel);
     } else if (item instanceof RunloopDevboxItem) {
       hostAlias = await connectToDevbox(item.devbox, context, outputChannel);
+    } else if (item instanceof SuperserveSandboxItem) {
+      const updated = await activateSuperserveSandbox(item.sandbox, outputChannel);
+      if (updated) {
+        vscode.window.showInformationMessage(
+          `Superserve sandbox "${updated.name}" is ${updated.status}.`,
+        );
+      }
+      return;
+    } else if (item instanceof FreestyleSandboxItem) {
+      hostAlias = await connectFreestyleVm(item.vm, outputChannel);
     }
 
     if (hostAlias) {
