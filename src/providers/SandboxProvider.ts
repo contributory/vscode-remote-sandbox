@@ -148,7 +148,6 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
       items.push(new ActionItem("Set E2B API key...", "remote-sandbox.e2bSetApiKey", "key"));
       return items;
     }
-    items.push(new ActionItem("Create E2B sandbox...", "remote-sandbox.e2bCreateSandbox", "add"));
     const sandboxes = await listE2bSandboxes();
     if (sandboxes.length === 0) {
       items.push(new ActionItem("No E2B sandboxes found", undefined, "info"));
@@ -168,11 +167,6 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
       ));
       return items;
     }
-    items.push(new ActionItem(
-      "Create Daytona sandbox...",
-      "remote-sandbox.daytonaCreateSandbox",
-      "add",
-    ));
     const sandboxes = await listDaytonaSandboxes();
     if (sandboxes.length === 0) {
       items.push(new ActionItem("No Daytona sandboxes found", undefined, "info"));
