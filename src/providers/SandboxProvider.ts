@@ -1,9 +1,6 @@
 import * as vscode from "vscode";
 import type { SandboxProviderId } from "../models/types";
 import { hasE2bApiKey, listE2bSandboxes } from "../services/e2b";
-import { hasDaytonaApiKey, listDaytonaSandboxes } from "../services/daytona";
-import { hasRunloopApiKey, listDevboxes } from "../services/runloop/runloopService";
-import type { Devbox } from "../services/runloop/runloopApi";
 import { hasFreestyleApiKey, listFreestyleVms, type FreestyleVM } from "../services/freestyle";
 
 export type SandboxTreeItem = vscode.TreeItem;
@@ -51,42 +48,6 @@ export class E2BSandboxItem extends vscode.TreeItem {
   }
 }
 
-export class DaytonaSandboxItem extends vscode.TreeItem {
-  constructor(
-    public readonly sandboxId: string,
-    public readonly name: string | undefined,
-    public readonly state?: string,
-  ) {
-    super(name || sandboxId, vscode.TreeItemCollapsibleState.None);
-    this.description = state ?? "";
-    this.iconPath = new vscode.ThemeIcon(
-      state === "started" ? "vm-running" : "vm-outline",
-    );
-    // State-aware contextValue so the UI can show "Stop" when started and
-    // "Start" when stopped. All Daytona sandboxes get a delete action.
-    this.contextValue =
-      state === "started" ? "daytonaSandboxStarted" : "daytonaSandboxStopped";
-    this.tooltip = `Daytona sandbox: ${sandboxId}`;
-  }
-}
-
-export class RunloopDevboxItem extends vscode.TreeItem {
-  constructor(public readonly devbox: Devbox) {
-    super(devbox.name || devbox.id, vscode.TreeItemCollapsibleState.None);
-    this.description = devbox.status;
-    this.iconPath = new vscode.ThemeIcon(
-      devbox.status === "suspended" ? "vm-outline" : "vm-running",
-    );
-    // State-aware contextValue so the UI can show "Suspend" when running and
-    // "Resume" when suspended. All devboxes get a delete (shutdown) action.
-    this.contextValue =
-      devbox.status === "suspended"
-        ? "runloopDevboxSuspended"
-        : "runloopDevboxRunning";
-    this.tooltip = `Runloop devbox: ${devbox.id}`;
-  }
-}
-
 export class FreestyleSandboxItem extends vscode.TreeItem {
   constructor(public readonly vm: FreestyleVM) {
     super(vm.id, vscode.TreeItemCollapsibleState.None);
@@ -119,8 +80,8 @@ export class FreestyleSandboxItem extends vscode.TreeItem {
 
 /**
  * Tree data provider for the "Sandboxes" view. The root shows one collapsible
- * section per provider (Freestyle, E2B, Daytona, Runloop); each section lazily
- * lists the user's sandboxes / devboxes from the corresponding service.
+ * section per provider (Freestyle, E2B); each section lazily lists the user's
+ * sandboxes / VMs from the corresponding service.
  */
 export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem> {
   private readonly _onDidChangeTreeData: vscode.EventEmitter<SandboxTreeItem | undefined | null | void> =
@@ -156,18 +117,6 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
           vscode.TreeItemCollapsibleState.Expanded,
           "server-process",
         ),
-        new SandboxSectionItem(
-          "Daytona Sandboxes",
-          "daytona",
-          vscode.TreeItemCollapsibleState.Expanded,
-          "server",
-        ),
-        new SandboxSectionItem(
-          "Runloop Devboxes",
-          "runloop",
-          vscode.TreeItemCollapsibleState.Expanded,
-          "package",
-        ),
       ];
     }
 
@@ -175,10 +124,6 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
       switch (element.provider) {
         case "e2b":
           return this.getE2bChildren();
-        case "daytona":
-          return this.getDaytonaChildren();
-        case "runloop":
-          return this.getRunloopChildren();
         case "freestyle":
           return this.getFreestyleChildren();
       }
@@ -200,40 +145,6 @@ export class SandboxProvider implements vscode.TreeDataProvider<SandboxTreeItem>
       items.push(...sandboxes.map((s) => new E2BSandboxItem(s.sandboxID, s.state)));
     }
     return items;
-  }
-
-  private async getDaytonaChildren(): Promise<SandboxTreeItem[]> {
-    const items: SandboxTreeItem[] = [];
-    if (!hasDaytonaApiKey()) {
-      items.push(new ActionItem(
-        "Set Daytona API key...",
-        "remote-sandbox.daytonaSetApiKey",
-        "key",
-      ));
-      return items;
-    }
-    const sandboxes = await listDaytonaSandboxes();
-    if (sandboxes.length === 0) {
-      items.push(new ActionItem("No Daytona sandboxes found", undefined, "info"));
-    } else {
-      items.push(...sandboxes.map((s) => new DaytonaSandboxItem(s.id, s.name, s.state)));
-    }
-    return items;
-  }
-
-  private async getRunloopChildren(): Promise<SandboxTreeItem[]> {
-    if (!hasRunloopApiKey()) {
-      return [
-        new ActionItem("Set Runloop API key...", "remote-sandbox.runloopSetApiKey", "key"),
-      ];
-    }
-    const devboxes = await listDevboxes(this.context);
-    if (devboxes.length === 0) {
-      return [
-        new ActionItem("No Runloop devboxes found", "remote-sandbox.runloopCreateDevbox", "add"),
-      ];
-    }
-    return devboxes.map((d) => new RunloopDevboxItem(d));
   }
 
   private async getFreestyleChildren(): Promise<SandboxTreeItem[]> {

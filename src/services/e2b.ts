@@ -38,7 +38,7 @@ export function hasE2bApiKey(): boolean {
   return getE2bApiKey() !== undefined;
 }
 
-/** Prompts for and saves the E2B API key to settings (Runloop-style). */
+/** Prompts for and saves the E2B API key to settings. */
 export async function setE2bApiKey(
   context: vscode.ExtensionContext,
 ): Promise<void> {
