@@ -89,7 +89,10 @@ export async function listE2bSandboxes(
     // { sandboxID, state, ... } objects (pagination is via headers, not a
     // { items } wrapper). Handle the array plus any future wrapper shapes so
     // a shape mismatch never silently yields an empty list.
-    const response = await e2bRequest<unknown>("/v2/sandboxes?limit=100", apiKey);
+    const response = await e2bRequest<unknown>(
+      "/v2/sandboxes?limit=100",
+      apiKey,
+    );
     if (Array.isArray(response)) {
       outputChannel?.appendLine(`[E2B] Listed ${response.length} sandbox(es).`);
       return response as E2BSandbox[];
@@ -154,14 +157,11 @@ export async function pauseE2bSandbox(
 
 /** Lists available E2B templates for selection.
  * API: GET /v2/templates */
-async function listE2bTemplates(
-  apiKey: string,
-): Promise<E2BTemplate[]> {
+async function listE2bTemplates(apiKey: string): Promise<E2BTemplate[]> {
   try {
-    const response = await e2bRequest<{ templates: E2BTemplate[] } | E2BTemplate[]>(
-      "/v2/templates",
-      apiKey,
-    );
+    const response = await e2bRequest<
+      { templates: E2BTemplate[] } | E2BTemplate[]
+    >("/v2/templates", apiKey);
     if (Array.isArray(response)) {
       return response;
     }
@@ -255,43 +255,16 @@ export async function createE2bSandbox(
     }
     const timeout = timeoutStr.trim() ? parseInt(timeoutStr, 10) : undefined;
 
-    // Step 3: secure mode
-    const securePick = await vscode.window.showQuickPick(
-      [
-        { label: "No", description: "Standard sandbox" },
-        { label: "Yes", description: "Secure all system communication" },
-      ],
-      { placeHolder: "Enable secure mode?", ignoreFocusOut: true },
-    );
-    if (!securePick) {
-      return undefined;
-    }
-    const secure = securePick.label === "Yes";
-
-    // Step 4: internet access
-    const internetPick = await vscode.window.showQuickPick(
-      [
-        { label: "Yes", description: "Allow sandbox to access the internet" },
-        { label: "No", description: "Block internet access" },
-      ],
-      { placeHolder: "Allow internet access?", ignoreFocusOut: true },
-    );
-    if (!internetPick) {
-      return undefined;
-    }
-    const allow_internet_access = internetPick.label === "Yes";
-
     // Build the request body
     const body: Record<string, unknown> = {
       templateID,
-      lifecycle: {
-        onTimeout: { action: "pause", keepMemory: true },
-        autoResume: true,
+      autoPause: true,
+      autoPauseMemory: true,
+      autoResume: {
+        enabled: true,
       },
     };
     if (timeout) body.timeout = timeout;
-    if (!secure) body.secure = false;
-    if (!allow_internet_access) body.allow_internet_access = false;
 
     const sandbox = await vscode.window.withProgress(
       {
@@ -299,13 +272,7 @@ export async function createE2bSandbox(
         title: "Creating E2B sandbox...",
         cancellable: false,
       },
-      () =>
-        e2bRequest<E2BSandbox>(
-          `/sandboxes`,
-          apiKey,
-          "POST",
-          body,
-        ),
+      () => e2bRequest<E2BSandbox>(`/sandboxes`, apiKey, "POST", body),
     );
 
     outputChannel.appendLine(`[E2B] Created sandbox: ${sandbox.sandboxID}`);
