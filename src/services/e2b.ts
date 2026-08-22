@@ -255,20 +255,7 @@ export async function createE2bSandbox(
     }
     const timeout = timeoutStr.trim() ? parseInt(timeoutStr, 10) : undefined;
 
-    // Step 3: auto-pause
-    const autoPausePick = await vscode.window.showQuickPick(
-      [
-        { label: "No", description: "Keep running until timeout" },
-        { label: "Yes", description: "Auto-pause sandbox after timeout" },
-      ],
-      { placeHolder: "Auto-pause sandbox after timeout?", ignoreFocusOut: true },
-    );
-    if (!autoPausePick) {
-      return undefined;
-    }
-    const autoPause = autoPausePick.label === "Yes";
-
-    // Step 4: secure mode
+    // Step 3: secure mode
     const securePick = await vscode.window.showQuickPick(
       [
         { label: "No", description: "Standard sandbox" },
@@ -281,7 +268,7 @@ export async function createE2bSandbox(
     }
     const secure = securePick.label === "Yes";
 
-    // Step 5: internet access
+    // Step 4: internet access
     const internetPick = await vscode.window.showQuickPick(
       [
         { label: "Yes", description: "Allow sandbox to access the internet" },
@@ -295,9 +282,14 @@ export async function createE2bSandbox(
     const allow_internet_access = internetPick.label === "Yes";
 
     // Build the request body
-    const body: Record<string, unknown> = { templateID };
+    const body: Record<string, unknown> = {
+      templateID,
+      lifecycle: {
+        onTimeout: { action: "pause", keepMemory: true },
+        autoResume: true,
+      },
+    };
     if (timeout) body.timeout = timeout;
-    if (autoPause) body.autoPause = true;
     if (!secure) body.secure = false;
     if (!allow_internet_access) body.allow_internet_access = false;
 
@@ -330,7 +322,7 @@ export async function createE2bSandbox(
 }
 
 /** Deletes (kills) an E2B sandbox permanently.
- * API: POST /sandboxes/{id}/kill */
+ * API: DELETE /sandboxes/{id} */
 export async function deleteE2bSandbox(
   sandboxID: string,
   outputChannel: vscode.OutputChannel,
@@ -359,9 +351,9 @@ export async function deleteE2bSandbox(
       },
       () =>
         e2bRequest(
-          `/sandboxes/${encodeURIComponent(sandboxID)}/kill`,
+          `/sandboxes/${encodeURIComponent(sandboxID)}`,
           apiKey,
-          "POST",
+          "DELETE",
         ),
     );
     outputChannel.appendLine(`[E2B] Deleted sandbox: ${sandboxID}`);
